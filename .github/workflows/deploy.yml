@@ -176,8 +176,8 @@ jobs:
             fi
 
             # Ensure PM2 is installed globally
-            echo "🚀 Ensuring PM2 is installed..."
-            npm install -g pm2
+            echo "🚀 Checking PM2..."
+            pm2 -v
 
             # Stop current processes gracefully
             echo "⏹️  Stopping current processes..."
