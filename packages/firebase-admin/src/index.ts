@@ -11,16 +11,24 @@ function loadCredential() {
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     candidatePaths.push(process.env.GOOGLE_APPLICATION_CREDENTIALS);
   }
+
+  // Try multiple locations to find the credentials file
   candidatePaths.push(path.join(process.cwd(), '.config/serviceAccountKey.json'));
   candidatePaths.push(path.resolve(__dirname, '../../.config/serviceAccountKey.json'));
+  candidatePaths.push(path.resolve(__dirname, '../../../.config/serviceAccountKey.json'));
+  candidatePaths.push(path.resolve(__dirname, '../../../../.config/serviceAccountKey.json'));
 
   console.log('[Firebase] Looking for credentials in:', candidatePaths);
 
   for (const candidatePath of candidatePaths) {
-    if (fs.existsSync(candidatePath)) {
-      console.log('[Firebase] Found credentials at:', candidatePath);
-      const serviceAccount = require(candidatePath);
-      return admin.credential.cert(serviceAccount);
+    try {
+      if (fs.existsSync(candidatePath)) {
+        console.log('[Firebase] Found credentials at:', candidatePath);
+        const serviceAccount = require(candidatePath);
+        return admin.credential.cert(serviceAccount);
+      }
+    } catch (error) {
+      console.warn(`[Firebase] Could not load credentials from ${candidatePath}:`, (error as any).message);
     }
   }
 

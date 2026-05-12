@@ -10,6 +10,8 @@ function loadCredential() {
     process.env.GOOGLE_APPLICATION_CREDENTIALS,
     path.join(process.cwd(), '.config/serviceAccountKey.json'),
     path.resolve(__dirname, '../../.config/serviceAccountKey.json'),
+    path.resolve(__dirname, '../../../.config/serviceAccountKey.json'),
+    path.resolve(__dirname, '../../../../.config/serviceAccountKey.json'),
   ].filter(Boolean);
 
   console.log('[Firebase] Looking for credentials in:', candidatePaths);
@@ -22,7 +24,7 @@ function loadCredential() {
         return admin.credential.cert(serviceAccount);
       }
     } catch (error) {
-      console.log('[Firebase] Path not accessible:', candidatePath);
+      console.log('[Firebase] Path not accessible:', candidatePath, (error).message);
     }
   }
 
