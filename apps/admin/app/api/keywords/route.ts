@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getFirestore } from '@ai-links/firebase-admin';
 import { verifyIdToken } from '@ai-links/firebase-admin';

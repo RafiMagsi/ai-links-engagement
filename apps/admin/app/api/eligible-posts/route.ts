@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { filterEligiblePosts } from '@/lib/comment-generator';
 import { CommentSettings } from '@ai-links/shared-types';

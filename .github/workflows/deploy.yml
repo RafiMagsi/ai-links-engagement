@@ -85,11 +85,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build firebase-admin
-        run: pnpm --filter firebase-admin build
-        
       - name: Build shared-types
         run: pnpm --filter shared-types build
+
+      - name: Build firebase-admin
+        run: pnpm --filter firebase-admin build
 
       - name: Build admin
         run: pnpm --filter admin build

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { AutomationAccount } from '@ai-links/shared-types';
 import { z } from 'zod';
