@@ -18,7 +18,7 @@
     "logs:admin": "pm2 logs ai-links-admin",
     "logs:worker": "pm2 logs ai-links-worker",
     "lint": "pnpm --filter admin lint",
-    "type-check": "pnpm type-check --filter '!**' && pnpm --filter '**' type-check",
+    "type-check": "tsc --noEmit && pnpm --filter '**' exec tsc --noEmit",
     "deploy": "pnpm build && pm2 restart all",
     "health-check": "curl -s http://localhost:3000/api/queue/status || echo 'Admin not responding' && redis-cli ping || echo 'Redis not responding'"
   },
