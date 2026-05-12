@@ -1,5 +1,5 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { initializeApp, getApps } from 'firebase/app';
+import { getAuth, Auth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,10 +10,39 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+let app: any;
+let authInstance: Auth | null = null;
 
-// Initialize Auth and get a reference to the service
-export const auth = getAuth(app);
+const initializeFirebase = () => {
+  try {
+    if (typeof window === 'undefined') return null;
+    if (getApps().length > 0) {
+      app = getApps()[0];
+    } else {
+      app = initializeApp(firebaseConfig);
+    }
+    authInstance = getAuth(app);
+    return authInstance;
+  } catch (error) {
+    console.warn('[Firebase] Failed to initialize:', error);
+    return null;
+  }
+};
+
+export const getAuthInstance = (): Auth | null => {
+  if (!authInstance && typeof window !== 'undefined') {
+    return initializeFirebase();
+  }
+  return authInstance;
+};
+
+export const auth: Auth = new Proxy({} as Auth, {
+  get: (_target, prop: string | symbol) => {
+    const instance = getAuthInstance();
+    if (!instance) return undefined;
+    const value = instance[prop as keyof Auth];
+    return typeof value === 'function' ? value.bind(instance) : value;
+  },
+}) as Auth;
 
 export default app;
