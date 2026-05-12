@@ -343,3 +343,23 @@ export interface SchedulerConfig {
   createdAt: Date;
   updatedAt: Date;
 }
+
+// Re-export schemas from schemas.ts
+export {
+  CreateAccountSchema,
+  PostWindowSchema,
+  UpdateKeywordsSchema,
+  UpdateScheduleSchema,
+  JobPayloadSchema,
+  CreateJobSchema,
+  JobActionSchema,
+  GeneratedContentSchema,
+  ErrorResponseSchema,
+  SuccessResponseSchema,
+  validateCreateAccount,
+  validateUpdateKeywords,
+  validateUpdateSchedule,
+  validateCreateJob,
+  validateJobAction,
+  validateGeneratedContent,
+} from './schemas.js';

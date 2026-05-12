@@ -1,11 +1,4 @@
 import { z } from 'zod';
-import {
-  TonePreset,
-  ContentIntent,
-  JobType,
-  JobStatus,
-  ActionType,
-} from './index';
 
 // Account Schemas
 export const CreateAccountSchema = z.object({
@@ -43,19 +36,19 @@ export const UpdateKeywordsSchema = z.object({
   secondaryKeywords: z.array(z.string().min(1)),
   blockedKeywords: z.array(z.string().min(1)),
   tonePreset: z.enum([
-    TonePreset.PROFESSIONAL,
-    TonePreset.FRIENDLY,
-    TonePreset.EDUCATIONAL,
-    TonePreset.INSPIRATIONAL,
-    TonePreset.HUMOROUS,
-  ]),
+    'professional',
+    'friendly',
+    'educational',
+    'inspirational',
+    'humorous',
+  ] as const),
   allowedIntents: z.array(z.enum([
-    ContentIntent.KNOWLEDGE_SHARING,
-    ContentIntent.QUESTION,
-    ContentIntent.INDUSTRY_NEWS,
-    ContentIntent.PERSONAL_STORY,
-    ContentIntent.CALL_TO_ACTION,
-  ])).min(1),
+    'knowledge_sharing',
+    'question',
+    'industry_news',
+    'personal_story',
+    'call_to_action',
+  ] as const)).min(1),
 });
 
 export type UpdateKeywordsInput = z.infer<typeof UpdateKeywordsSchema>;
@@ -85,7 +78,7 @@ export const JobPayloadSchema = z.object({
 
 export const CreateJobSchema = z.object({
   accountId: z.string().min(1),
-  jobType: z.enum([JobType.POST_GENERATION, JobType.COMMENT_GENERATION]),
+  jobType: z.enum(['post_generation', 'comment_generation'] as const),
   payload: JobPayloadSchema.optional(),
   priority: z.number().int().min(1).max(10).default(5),
 });

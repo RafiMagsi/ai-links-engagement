@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { ErrorCode } from '@ai-links/shared-types';
 
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -105,7 +104,7 @@ export async function GET() {
       {
         success: false,
         error: {
-          code: ErrorCode.INTERNAL_ERROR,
+          code: 'INTERNAL_ERROR',
           message: 'Health check failed',
           details: { error: errorMessage },
         },
@@ -153,7 +152,7 @@ export async function POST(request: Request) {
       {
         success: false,
         error: {
-          code: ErrorCode.INTERNAL_ERROR,
+          code: 'INTERNAL_ERROR',
           message: 'Deep health check failed',
           details: { error: errorMessage },
         },
