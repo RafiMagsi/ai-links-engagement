@@ -2,6 +2,8 @@
 
 export const dynamic = 'force-dynamic';
 
+
+
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
