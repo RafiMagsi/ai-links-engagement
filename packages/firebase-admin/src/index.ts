@@ -1,9 +1,13 @@
 import admin from 'firebase-admin';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 // Initialize Firebase Admin SDK
 let adminApp: admin.app.App | undefined;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function loadCredential() {
   const candidatePaths: string[] = [];
@@ -24,7 +28,7 @@ function loadCredential() {
     try {
       if (fs.existsSync(candidatePath)) {
         console.log('[Firebase] Found credentials at:', candidatePath);
-        const serviceAccount = require(candidatePath);
+        const serviceAccount = JSON.parse(fs.readFileSync(candidatePath, 'utf-8'));
         return admin.credential.cert(serviceAccount);
       }
     } catch (error) {
