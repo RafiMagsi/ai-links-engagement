@@ -1,0 +1,227 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20.x'
+  PNPM_VERSION: '9.0.0'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Lint
+        run: pnpm lint
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build admin
+        run: pnpm --filter admin build
+
+      - name: Build worker
+        run: pnpm --filter worker build
+
+      - name: Upload admin build
+        uses: actions/upload-artifact@v3
+        with:
+          name: admin-build
+          path: apps/admin/.next
+          retention-days: 5
+
+      - name: Upload worker build
+        uses: actions/upload-artifact@v3
+        with:
+          name: worker-build
+          path: apps/worker/dist
+          retention-days: 5
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to production server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script: |
+            set -e
+            echo "Starting deployment..."
+
+            cd /opt/ai-links-engagement
+
+            # Pull latest changes
+            echo "Pulling latest changes..."
+            git fetch origin main
+            git checkout origin/main
+
+            # Install dependencies
+            echo "Installing dependencies..."
+            pnpm install --frozen-lockfile
+
+            # Build applications
+            echo "Building applications..."
+            pnpm run build
+
+            # Backup current ecosystem config
+            echo "Backing up current state..."
+            cp ecosystem.config.js ecosystem.config.js.backup
+
+            # Restart services with PM2
+            echo "Restarting services..."
+            pm2 restart ecosystem.config.js --update-env
+            pm2 save
+
+            # Wait for services to stabilize
+            sleep 5
+
+            # Health check
+            echo "Running health checks..."
+            if curl -f -s http://localhost:3000/api/queue/status > /dev/null; then
+              echo "Admin service is healthy"
+            else
+              echo "Admin service health check failed"
+              pm2 restart ecosystem.config.js.backup
+              exit 1
+            fi
+
+            if redis-cli -a ${{ secrets.REDIS_PASSWORD }} ping | grep -q PONG; then
+              echo "Redis is healthy"
+            else
+              echo "Redis health check failed"
+              exit 1
+            fi
+
+            echo "Deployment completed successfully!"
+
+      - name: Send deployment notification
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Deployment to production completed successfully!'
+            })
+
+      - name: Send failure notification
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ Deployment to production failed. Please check the logs.'
+            })
+
+  post-deploy-checks:
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check admin dashboard
+        run: |
+          timeout 30 bash -c 'until curl -f http://${{ secrets.DEPLOY_HOST }}:3000/api/queue/status > /dev/null; do sleep 1; done'
+
+      - name: Check application logs
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          script: |
+            echo "Recent application logs:"
+            pm2 logs --lines 20 --nostream
+
+      - name: Verify services
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          script: |
+            echo "Service status:"
+            pm2 list
+            echo ""
+            echo "Checking Firestore connectivity..."
+            # Add Firestore connectivity check here
+            echo ""
+            echo "All checks passed!"

@@ -5,10 +5,22 @@
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "dev": "pnpm --filter admin dev",
-    "build": "pnpm --filter admin build",
-    "start": "pnpm --filter admin start",
+    "dev:all": "concurrently \"pnpm --filter admin dev\" \"pnpm --filter worker dev\"",
+    "build": "pnpm --filter admin build && pnpm --filter worker build",
+    "build:admin": "pnpm --filter admin build",
+    "build:worker": "pnpm --filter worker build",
+    "start": "pm2 start ecosystem.config.js",
+    "start:admin": "pnpm --filter admin start",
+    "start:worker": "node apps/worker/dist/index.js",
+    "stop": "pm2 stop all",
+    "restart": "pm2 restart all",
+    "logs": "pm2 logs",
+    "logs:admin": "pm2 logs ai-links-admin",
+    "logs:worker": "pm2 logs ai-links-worker",
     "lint": "pnpm --filter admin lint",
-    "type-check": "pnpm --filter admin type-check"
+    "type-check": "pnpm type-check --filter '!**' && pnpm --filter '**' type-check",
+    "deploy": "pnpm build && pm2 restart all",
+    "health-check": "curl -s http://localhost:3000/api/queue/status || echo 'Admin not responding' && redis-cli ping || echo 'Redis not responding'"
   },
   "devDependencies": {
     "typescript": "^5.3.3",

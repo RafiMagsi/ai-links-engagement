@@ -6,24 +6,67 @@ export interface AutomationAccount {
   createdAt: Date;
   updatedAt: Date;
   isActive: boolean;
+  dailyPostLimit: number;
+  dailyCommentLimit: number;
+  dailyReactionLimit: number;
+  timezone: string;
+  settings?: {
+    enableAutoPosting: boolean;
+    enableAutoComments: boolean;
+    enableAutoReactions: boolean;
+    minMinutesBetweenActions: number;
+  };
+}
+
+// Tone Preset Type
+export enum TonePreset {
+  PROFESSIONAL = 'professional',
+  FRIENDLY = 'friendly',
+  EDUCATIONAL = 'educational',
+  INSPIRATIONAL = 'inspirational',
+  HUMOROUS = 'humorous'
+}
+
+// Intent Type
+export enum ContentIntent {
+  KNOWLEDGE_SHARING = 'knowledge_sharing',
+  QUESTION = 'question',
+  INDUSTRY_NEWS = 'industry_news',
+  PERSONAL_STORY = 'personal_story',
+  CALL_TO_ACTION = 'call_to_action'
 }
 
 // Automation Keywords Type
 export interface AutomationKeywords {
   id: string;
   accountId: string;
-  keywords: string[];
+  primaryKeywords: string[];
+  secondaryKeywords: string[];
+  blockedKeywords: string[];
+  tonePreset: TonePreset;
+  allowedIntents: ContentIntent[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+// Post Window Type
+export interface PostWindow {
+  startTime: string; // HH:mm format
+  endTime: string; // HH:mm format
+  enabled: boolean;
 }
 
 // Automation Schedule Type
 export interface AutomationSchedule {
   id: string;
   accountId: string;
-  dayOfWeek: number[]; // 0-6, Sunday-Saturday
-  timeOfDay: string; // HH:mm format
-  enabled: boolean;
+  weekdayPostWindow: PostWindow;
+  weekendPostWindow: PostWindow;
+  weekdayCommentWindow: PostWindow;
+  weekendCommentWindow: PostWindow;
+  timezone: string;
+  minMinutesBetweenActions: number;
+  weekdaysEnabled: boolean[];  // [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,35 +77,69 @@ export enum JobStatus {
   PROCESSING = 'processing',
   COMPLETED = 'completed',
   FAILED = 'failed',
-  PAUSED = 'paused'
+  SKIPPED_RATE_LIMITED = 'skipped_rate_limited',
+  CANCELLED = 'cancelled'
+}
+
+export enum JobType {
+  POST_GENERATION = 'post_generation',
+  COMMENT_GENERATION = 'comment_generation',
+  REACTION_ACTION = 'reaction_action'
 }
 
 export interface AutomationJob {
   id: string;
   accountId: string;
+  jobType: JobType;
   status: JobStatus;
-  startedAt: Date;
+  priority: number;
+  payload: {
+    keyword?: string;
+    theme?: string;
+    contentId?: string;
+    targetProfileUrl?: string;
+    manualTrigger?: boolean;
+  };
+  result?: {
+    generatedContent?: string;
+    aiModel?: string;
+    tokensUsed?: number;
+    publishedUrl?: string;
+    error?: string;
+  };
+  attempts: number;
+  maxAttempts: number;
+  startedAt?: Date;
   completedAt?: Date;
-  metadata?: Record<string, unknown>;
+  nextRetryAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
 // Automation Action Log Type
 export enum ActionType {
-  PROFILE_VIEW = 'profile_view',
-  CONNECTION_REQUEST = 'connection_request',
-  MESSAGE_SENT = 'message_sent',
-  CONTENT_ENGAGEMENT = 'content_engagement'
+  POST_CREATED = 'post_created',
+  COMMENT_CREATED = 'comment_created',
+  REACTION_ADDED = 'reaction_added',
+  POST_GENERATION_STARTED = 'post_generation_started',
+  POST_GENERATION_FAILED = 'post_generation_failed',
+  QUOTA_EXCEEDED = 'quota_exceeded'
 }
 
 export interface AutomationActionLog {
   id: string;
-  jobId: string;
+  jobId?: string;
   accountId: string;
   actionType: ActionType;
-  targetProfile?: string;
+  targetContentId?: string;
+  targetProfileUrl?: string;
   success: boolean;
+  details?: {
+    generatedContent?: string;
+    prompt?: string;
+    model?: string;
+    tokensUsed?: number;
+  };
   error?: string;
   createdAt: Date;
 }
@@ -70,13 +147,15 @@ export interface AutomationActionLog {
 // Daily Usage Type
 export interface DailyUsage {
   id: string;
-  accountId: string;
-  date: Date;
-  profileViewsCount: number;
-  connectionRequestsCount: number;
-  messagesSentCount: number;
-  contentEngagementCount: number;
+  date: string; // YYYY-MM-DD format
+  postsCreated: number;
+  commentsCreated: number;
+  reactionsAdded: number;
   totalActions: number;
+  quotaPostsRemaining: number;
+  quotaCommentsRemaining: number;
+  quotaReactionsRemaining: number;
+  quotaTotalRemaining: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -95,4 +174,72 @@ export interface AdminCustomClaims {
   admin: boolean;
   superAdmin?: boolean;
   permissions?: string[];
+}
+
+// Re-export validation schemas
+export * from './schemas';
+
+// Global Automation Policy Type
+export interface AutomationPolicy {
+  id: string;
+  automationEnabled: boolean;
+  globalKillSwitch: boolean;
+  quotaCapMultiplier: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// BullMQ Job Types
+export enum BullJobType {
+  POST_ACTION = 'post_action',
+  COMMENT_ACTION = 'comment_action',
+  REACTION_ACTION = 'reaction_action',
+  POST_SCHEDULER = 'post_scheduler',
+  COMMENT_SCHEDULER = 'comment_scheduler',
+  REACTION_SCHEDULER = 'reaction_scheduler',
+  QUOTA_RESET = 'quota_reset'
+}
+
+export interface BullJobData {
+  accountId: string;
+  actionType: ActionType;
+  targetId?: string;
+  content?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface QueueMetrics {
+  pending: number;
+  active: number;
+  completed: number;
+  failed: number;
+  delayed: number;
+}
+
+export interface JobDetail {
+  id: string;
+  name: string;
+  data: BullJobData;
+  status: JobStatus;
+  progress: number;
+  attempt: number;
+  max_attempts: number;
+  failedReason?: string;
+  stackTrace?: string;
+  createdAt: Date;
+  finishedAt?: Date;
+  processedOn?: Date;
+  completedOn?: Date;
+}
+
+// Scheduler Configuration Type
+export interface SchedulerConfig {
+  accountId: string;
+  jobType: BullJobType;
+  cronExpression: string;
+  enabled: boolean;
+  lastRun?: Date;
+  nextRun?: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
