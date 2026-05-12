@@ -85,31 +85,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build shared-types
-        run: pnpm --filter shared-types build
+      - name: Build all packages
+        run: pnpm build
 
-      - name: Build firebase-admin
-        run: pnpm --filter firebase-admin build
-
-      - name: Build admin
-        run: pnpm --filter admin build
-
-      - name: Build worker
-        run: pnpm --filter worker build
-
-      - name: Upload admin build
-        uses: actions/upload-artifact@v4
-        with:
-          name: admin-build
-          path: apps/admin/.next
-          retention-days: 5
-
-      - name: Upload worker build
-        uses: actions/upload-artifact@v4
-        with:
-          name: worker-build
-          path: apps/worker/dist
-          retention-days: 5
+      - name: Verify build outputs
+        run: |
+          test -d apps/admin/.next || (echo "❌ Admin build failed" && exit 1)
+          test -d apps/worker/dist || (echo "❌ Worker build failed" && exit 1)
+          echo "✅ All builds completed successfully"
 
   deploy:
     needs: build
@@ -119,14 +102,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${{ secrets.DEPLOY_PORT || 22 }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
       - name: Deploy to HestiaCP server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ env.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_PORT || 22 }}
-          script: |
+        env:
+          FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+        run: |
+          ssh -p ${{ secrets.DEPLOY_PORT || 22 }} ${{ env.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'DEPLOY_SCRIPT'
             set -e
 
             DEPLOY_DIR="${{ env.DEPLOY_DIR }}"
@@ -169,47 +157,22 @@ jobs:
               cp ecosystem.config.js "$BACKUP_DIR/"
             fi
 
-            # Create .env.local if it doesn't exist (use GitHub secrets)
-            if [ ! -f .env.local ]; then
-              echo "⚙️  Creating .env.local..."
-              cat > .env.local << 'EOF'
-            NODE_ENV=production
-            FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
-            FIREBASE_PRIVATE_KEY=${{ secrets.FIREBASE_PRIVATE_KEY }}
-            FIREBASE_CLIENT_EMAIL=${{ secrets.FIREBASE_CLIENT_EMAIL }}
-            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-            REDIS_HOST=127.0.0.1
-            REDIS_PORT=6379
-            ADMIN_BASE_URL=https://ailinksengagement.dropticks.com
-            DAILY_GLOBAL_ENGAGEMENT_CAP=100
-            EOF
-            fi
+            # Create .config directory and serviceAccountKey.json
+            echo "⚙️  Setting up Firebase credentials..."
+            mkdir -p .config
+            echo "$FIREBASE_SERVICE_ACCOUNT_KEY" > .config/serviceAccountKey.json
 
-            # Create app-specific .env files
+            # Skip .env creation - will be configured via Hestia control panel
+            # The credentials are already set up via serviceAccountKey.json
+            echo "⚙️  Environment setup completed"
+
+            # .env.local files should be manually created on the server with proper secrets
+            # This prevents exposing secrets in CI logs
             if [ ! -f apps/admin/.env.local ]; then
-              cp apps/admin/.env.example apps/admin/.env.local
+              echo "⚠️  apps/admin/.env.local not found - please create it manually on the server"
             fi
-
             if [ ! -f apps/worker/.env.local ]; then
-              cat > apps/worker/.env.local << 'EOF'
-            NODE_ENV=production
-            FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
-            FIREBASE_PRIVATE_KEY=${{ secrets.FIREBASE_PRIVATE_KEY }}
-            FIREBASE_CLIENT_EMAIL=${{ secrets.FIREBASE_CLIENT_EMAIL }}
-            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-            REDIS_HOST=127.0.0.1
-            REDIS_PORT=6379
-            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
-            WORKER_LOG_LEVEL=info
-            WORKER_CONCURRENCY=5
-            TIMEZONE=Asia/Karachi
-            DAILY_QUOTA_POSTS=30
-            DAILY_QUOTA_COMMENTS=50
-            DAILY_QUOTA_REACTIONS=20
-            DAILY_QUOTA_TOTAL=100
-            JOB_MAX_ATTEMPTS=3
-            JOB_BACKOFF_DELAY=1000
-            EOF
+              echo "⚠️  apps/worker/.env.local not found - please create it manually on the server"
             fi
 
             # Ensure PM2 is installed globally
@@ -271,16 +234,12 @@ jobs:
             echo "Processes:"
             pm2 list
             echo ""
+          DEPLOY_SCRIPT
 
       - name: Post-deployment verification
-        uses: appleboy/ssh-action@master
         if: success()
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ env.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_PORT || 22 }}
-          script: |
+        run: |
+          ssh -p ${{ secrets.DEPLOY_PORT || 22 }} ${{ env.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'VERIFY_SCRIPT'
             echo "=========================================="
             echo "Post-Deployment Verification"
             echo "=========================================="
@@ -305,6 +264,7 @@ jobs:
             echo "=========================================="
             echo "✅ All checks passed!"
             echo "=========================================="
+          VERIFY_SCRIPT
 
       - name: Deployment success notification
         if: success()
