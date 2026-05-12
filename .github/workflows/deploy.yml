@@ -151,7 +151,31 @@ jobs:
 
             # Build applications
             echo "🔨 Building applications..."
-            pnpm run build
+            if ! pnpm run build; then
+              echo "❌ Build failed!"
+              exit 1
+            fi
+
+            # Verify builds
+            echo "📋 Verifying builds..."
+            if [ ! -d apps/admin/.next ] || [ -z "$(find apps/admin/.next -type f 2>/dev/null | head -1)" ]; then
+              echo "❌ Admin build incomplete - .next folder missing or empty"
+              exit 1
+            fi
+
+            if [ ! -d apps/worker/dist ] || [ -z "$(find apps/worker/dist -type f 2>/dev/null | head -1)" ]; then
+              echo "❌ Worker build incomplete - dist folder missing or empty"
+              ls -la apps/worker/ 2>/dev/null || echo "Worker app directory not found"
+              exit 1
+            fi
+
+            if [ ! -f apps/worker/dist/lib/logger.js ]; then
+              echo "❌ Worker build failed - lib/logger.js not found"
+              ls -la apps/worker/dist/lib/ 2>/dev/null || echo "Worker dist/lib not found"
+              exit 1
+            fi
+
+            echo "✅ All builds verified successfully"
 
             # Create backup
             echo "💾 Creating backup..."
