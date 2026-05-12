@@ -29,20 +29,8 @@ export default function AccountsPage() {
     setError(null);
 
     try {
-      const token = await user.getIdToken();
-      const response = await fetch('/api/accounts', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create account');
-      }
+      const { ApiClient } = await import('@/lib/api-client');
+      await ApiClient.post('/api/accounts', formData);
 
       setShowForm(false);
       setFormData({
@@ -56,7 +44,9 @@ export default function AccountsPage() {
       // Refresh the page to show new account
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      setError(errorMessage);
+      console.error('Failed to create account:', err);
     } finally {
       setLoading(false);
     }

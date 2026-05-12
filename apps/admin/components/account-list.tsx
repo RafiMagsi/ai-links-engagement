@@ -3,6 +3,7 @@
 import { AutomationAccount } from '@ai-links/shared-types';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { ApiClient } from '@/lib/api-client';
 
 export function AccountList() {
   const [accounts, setAccounts] = useState<AutomationAccount[]>([]);
@@ -15,18 +16,12 @@ export function AccountList() {
 
     async function fetchAccounts() {
       try {
-        const token = await user.getIdToken();
-        const response = await fetch('/api/accounts', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch accounts');
-        const data = await response.json();
-        setAccounts(data.accounts);
+        const data = await ApiClient.get<{ accounts: AutomationAccount[] }>('/api/accounts');
+        setAccounts(data.accounts || []);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
+        const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+        setError(errorMessage);
+        console.error('Failed to fetch accounts:', err);
       } finally {
         setLoading(false);
       }
