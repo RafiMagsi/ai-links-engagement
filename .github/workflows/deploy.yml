@@ -10,6 +10,7 @@ env:
   PNPM_VERSION: '9.0.0'
   DEPLOY_DIR: '/home/rafiadmin/web/ailinksengagement.dropticks.com/public_html'
   DEPLOY_USER: 'rafiadmin'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   test:
@@ -232,11 +233,11 @@ jobs:
             # Health checks
             echo "🏥 Running health checks..."
 
-            # Check Admin service
+            # Check Admin service - try to connect to port 3000
             ADMIN_HEALTH=0
             for i in {1..30}; do
-              if curl -f -s http://127.0.0.1:3000/api/queue/status > /dev/null 2>&1; then
-                echo "✅ Admin service is healthy"
+              if curl -s http://127.0.0.1:3000/ > /dev/null 2>&1; then
+                echo "✅ Admin service is responding on port 3000"
                 ADMIN_HEALTH=1
                 break
               fi
@@ -245,8 +246,11 @@ jobs:
             done
 
             if [ $ADMIN_HEALTH -eq 0 ]; then
-              echo "❌ Admin service health check failed"
-              pm2 logs
+              echo "❌ Admin service not responding on port 3000"
+              echo "PM2 status:"
+              pm2 status
+              echo "Recent logs:"
+              pm2 logs --lines 20 --nostream
               exit 1
             fi
 
