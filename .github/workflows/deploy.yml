@@ -162,17 +162,20 @@ jobs:
             mkdir -p .config
             echo "$FIREBASE_SERVICE_ACCOUNT_KEY" > .config/serviceAccountKey.json
 
-            # Skip .env creation - will be configured via Hestia control panel
-            # The credentials are already set up via serviceAccountKey.json
-            echo "⚙️  Environment setup completed"
+            ABSOLUTE_PATH="$DEPLOY_DIR/.config/serviceAccountKey.json"
+            echo "Firebase credentials created at: $ABSOLUTE_PATH"
 
-            # .env.local files should be manually created on the server with proper secrets
-            # This prevents exposing secrets in CI logs
+            # Ensure .env.local files exist - they should be created manually on server
+            echo "⚙️  Checking for .env.local files..."
+
             if [ ! -f apps/admin/.env.local ]; then
-              echo "⚠️  apps/admin/.env.local not found - please create it manually on the server"
+              echo "⚠️  apps/admin/.env.local not found - create it on the server with:"
+              echo "   GOOGLE_APPLICATION_CREDENTIALS=$ABSOLUTE_PATH"
             fi
+
             if [ ! -f apps/worker/.env.local ]; then
-              echo "⚠️  apps/worker/.env.local not found - please create it manually on the server"
+              echo "⚠️  apps/worker/.env.local not found - create it on the server with:"
+              echo "   GOOGLE_APPLICATION_CREDENTIALS=$ABSOLUTE_PATH"
             fi
 
             # Ensure PM2 is installed globally
