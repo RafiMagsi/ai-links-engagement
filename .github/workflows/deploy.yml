@@ -161,13 +161,18 @@ jobs:
               cp ecosystem.config.js "$BACKUP_DIR/"
             fi
 
-            # Create .config directory and serviceAccountKey.json
-            echo "⚙️  Setting up Firebase credentials..."
-            mkdir -p .config
-            echo "$FIREBASE_SERVICE_ACCOUNT_KEY" > .config/serviceAccountKey.json
-
+            # Check Firebase credentials file
+            echo "⚙️  Checking Firebase credentials..."
             ABSOLUTE_PATH="$DEPLOY_DIR/.config/serviceAccountKey.json"
-            echo "Firebase credentials created at: $ABSOLUTE_PATH"
+
+            if [ ! -f .config/serviceAccountKey.json ]; then
+              echo "❌ CRITICAL: .config/serviceAccountKey.json not found!"
+              echo "Please create it manually on the server with your Firebase service account key:"
+              echo "  $ABSOLUTE_PATH"
+              exit 1
+            fi
+
+            echo "✅ Firebase credentials file found"
 
             # Ensure .env.local files exist - they should be created manually on server
             echo "⚙️  Checking for .env.local files..."
