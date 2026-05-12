@@ -2,7 +2,12 @@
 export interface AutomationAccount {
   id: string;
   userId: string;
-  linkedinUrl: string;
+  name: string;
+  email: string;
+  bio?: string;
+  location?: string;
+  role?: string;
+  skills?: string[];
   createdAt: Date;
   updatedAt: Date;
   isActive: boolean;

@@ -72,14 +72,8 @@ export function AccountList() {
           {accounts.map((account) => (
             <tr key={account.id} className="hover:bg-gray-50">
               <td className="px-6 py-4 text-sm text-gray-900">
-                <a
-                  href={account.linkedinUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  {account.linkedinUrl}
-                </a>
+                <div className="font-medium">{account.name}</div>
+                <div className="text-gray-500 text-xs">{account.email}</div>
               </td>
               <td className="px-6 py-4 text-sm">
                 <span

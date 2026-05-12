@@ -174,7 +174,7 @@ export default function JobsPage() {
                     >
                       {accounts.map((acc) => (
                         <option key={acc.id} value={acc.id}>
-                          {acc.linkedinUrl}
+                          {acc.name} ({acc.email})
                         </option>
                       ))}
                     </select>

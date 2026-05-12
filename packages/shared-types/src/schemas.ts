@@ -9,7 +9,13 @@ import {
 
 // Account Schemas
 export const CreateAccountSchema = z.object({
-  linkedinUrl: z.string().url('Invalid LinkedIn URL'),
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Invalid email'),
+  bio: z.string().optional(),
+  location: z.string().optional(),
+  role: z.string().optional(),
+  skills: z.array(z.string()).optional(),
+  avatarUrl: z.string().url().optional(),
   dailyPostLimit: z.number().int().min(1).max(100),
   dailyCommentLimit: z.number().int().min(1).max(100),
   dailyReactionLimit: z.number().int().min(1).max(100),

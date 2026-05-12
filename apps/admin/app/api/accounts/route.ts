@@ -9,7 +9,12 @@ import { z } from 'zod';
 const { initializeFirebaseAdmin, getFirestore } = require('@ai-links/firebase-admin');
 
 const CreateAccountSchema = z.object({
-  linkedinUrl: z.string().url(),
+  name: z.string().min(1),
+  email: z.string().email(),
+  bio: z.string().optional(),
+  location: z.string().optional(),
+  role: z.string().optional(),
+  skills: z.string().optional(),
   dailyPostLimit: z.number().min(1).max(100),
   dailyCommentLimit: z.number().min(1).max(100),
   dailyReactionLimit: z.number().min(1).max(100),
@@ -108,7 +113,7 @@ export async function POST(request: NextRequest) {
     console.log('[3] Parsing request body...');
     const body = await request.json();
     const data = CreateAccountSchema.parse(body);
-    console.log('[3] ✓ Request parsed, data:', { linkedinUrl: data.linkedinUrl, timezone: data.timezone });
+    console.log('[3] ✓ Request parsed, data:', { name: data.name, email: data.email, timezone: data.timezone });
 
     const accountId = crypto.randomUUID?.() || `account-${Date.now()}`;
     console.log('[4] Generated account ID:', accountId);
@@ -116,7 +121,12 @@ export async function POST(request: NextRequest) {
     const account: AutomationAccount = {
       id: accountId,
       userId,
-      linkedinUrl: data.linkedinUrl,
+      name: data.name,
+      email: data.email,
+      bio: data.bio,
+      location: data.location,
+      role: data.role,
+      skills: data.skills ? data.skills.split(',').map(s => s.trim()) : [],
       isActive: true,
       dailyPostLimit: data.dailyPostLimit,
       dailyCommentLimit: data.dailyCommentLimit,
@@ -150,7 +160,7 @@ export async function POST(request: NextRequest) {
         details: (dbError as any).details,
       });
       console.warn('[WARNING] Firestore unavailable - account created in memory but not persisted');
-      console.warn('Account data:', { accountId, userId, linkedinUrl: account.linkedinUrl });
+      console.warn('Account data:', { accountId, userId, name: account.name, email: account.email });
       console.warn('FIX: Check that Firestore database exists in Firebase console at https://console.firebase.google.com');
       console.warn('     Path: Your Project → Firestore Database → Create Database (if not exists)');
 
