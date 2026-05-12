@@ -1,0 +1,19 @@
+{
+  "name": "ai-links-engagement",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "pnpm --filter admin dev",
+    "build": "pnpm --filter admin build",
+    "start": "pnpm --filter admin start",
+    "lint": "pnpm --filter admin lint",
+    "type-check": "pnpm --filter admin type-check"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18"
+  }
+}
