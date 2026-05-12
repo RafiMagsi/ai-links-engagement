@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { OfficialReaction, ReactionType } from '@ai-links/shared-types';
 
@@ -12,13 +12,7 @@ export default function ReactionsMonitorPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    if (accountId) {
-      fetchReactions();
-    }
-  }, [accountId, typeFilter]);
-
-  const fetchReactions = async () => {
+  const fetchReactions = useCallback(async () => {
     try {
       setLoading(true);
       const url = new URL('/api/reactions', window.location.origin);
@@ -38,7 +32,13 @@ export default function ReactionsMonitorPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accountId, typeFilter]);
+
+  useEffect(() => {
+    if (accountId) {
+      fetchReactions();
+    }
+  }, [accountId, typeFilter, fetchReactions]);
 
   const getTypeColor = (type: ReactionType) => {
     switch (type) {

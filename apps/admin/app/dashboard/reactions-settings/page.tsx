@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { ReactionSettings, ReactionType } from '@ai-links/shared-types';
 
@@ -28,13 +28,7 @@ export default function ReactionSettingsPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    if (accountId) {
-      fetchSettings();
-    }
-  }, [accountId]);
-
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/reaction-settings?accountId=${accountId}`);
@@ -73,7 +67,13 @@ export default function ReactionSettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accountId]);
+
+  useEffect(() => {
+    if (accountId) {
+      fetchSettings();
+    }
+  }, [accountId, fetchSettings]);
 
   const toggleReactionType = (type: ReactionType) => {
     const types = settings.allowedReactionTypes;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { AutomationComment, CommentStatus } from '@ai-links/shared-types';
 
@@ -12,13 +12,7 @@ export default function CommentsMonitorPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    if (accountId) {
-      fetchComments();
-    }
-  }, [accountId, statusFilter]);
-
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     try {
       setLoading(true);
       const url = new URL('/api/comments', window.location.origin);
@@ -38,7 +32,13 @@ export default function CommentsMonitorPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accountId, statusFilter]);
+
+  useEffect(() => {
+    if (accountId) {
+      fetchComments();
+    }
+  }, [accountId, statusFilter, fetchComments]);
 
   const handleAction = async (
     commentId: string,

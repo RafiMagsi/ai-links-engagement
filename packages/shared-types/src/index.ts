@@ -56,6 +56,42 @@ export interface PostWindow {
   enabled: boolean;
 }
 
+// Reaction Type
+export enum ReactionType {
+  FEEDBACK_GIVEN = 'feedback_given',
+  CURATED = 'curated',
+  SPOTLIGHT = 'spotlight'
+}
+
+// Reaction Settings Type
+export interface ReactionSettings {
+  id: string;
+  accountId: string;
+  allowedReactionTypes: ReactionType[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Official Reaction Type
+export interface OfficialReaction {
+  id: string;
+  accountId: string;
+  reactionType: ReactionType;
+  targetContentId: string;
+  targetProfileUrl: string;
+  createdAt: Date;
+}
+
+// Comment Settings Type
+export interface CommentSettings {
+  id: string;
+  accountId: string;
+  commentTemplate?: string;
+  autoCommentEnabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // Automation Schedule Type
 export interface AutomationSchedule {
   id: string;

@@ -128,7 +128,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-gray-600 text-sm font-medium mb-2">Today's Posts</h3>
+            <h3 className="text-gray-600 text-sm font-medium mb-2">Today&apos;s Posts</h3>
             <p className="text-3xl font-bold text-gray-900">{usage?.postsCreated || 0}</p>
             <p className="text-gray-500 text-xs mt-2">
               {usage ? `${usage.quotaPostsRemaining} remaining` : 'Loading...'}
@@ -136,7 +136,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-gray-600 text-sm font-medium mb-2">Today's Comments</h3>
+            <h3 className="text-gray-600 text-sm font-medium mb-2">Today&apos;s Comments</h3>
             <p className="text-3xl font-bold text-gray-900">{usage?.commentsCreated || 0}</p>
             <p className="text-gray-500 text-xs mt-2">
               {usage ? `${usage.quotaCommentsRemaining} remaining` : 'Loading...'}

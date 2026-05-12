@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { CommentSettings } from '@ai-links/shared-types';
 
@@ -27,13 +27,7 @@ export default function CommentSettingsPage() {
   const [message, setMessage] = useState('');
   const [keywordInput, setKeywordInput] = useState('');
 
-  useEffect(() => {
-    if (accountId) {
-      fetchSettings();
-    }
-  }, [accountId]);
-
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/comment-settings?accountId=${accountId}`);
@@ -46,7 +40,13 @@ export default function CommentSettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accountId]);
+
+  useEffect(() => {
+    if (accountId) {
+      fetchSettings();
+    }
+  }, [accountId, fetchSettings]);
 
   const handleSave = async () => {
     try {

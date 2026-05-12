@@ -114,7 +114,7 @@ export default function UsagePage() {
             {/* Today's Usage */}
             {todayUsage && (
               <div className="bg-white rounded-lg shadow-md p-8">
-                <h3 className="text-xl font-bold text-gray-900 mb-6">Today's Usage</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-6">Today&apos;s Usage</h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   {/* Posts */}
