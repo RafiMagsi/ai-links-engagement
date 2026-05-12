@@ -1,9 +1,9 @@
 import { getFirestore } from '@ai-links/firebase-admin';
 import { getLogger } from './logger';
-import { BullJobData, ActionType } from '@ai-links/shared-types';
+import { BullJobData, ActionType, AutomationPolicy } from '@ai-links/shared-types';
+import { FieldValue } from 'firebase-admin/firestore';
 
 const logger = getLogger();
-const firestore = getFirestore();
 
 export async function handlePostAction(jobData: BullJobData): Promise<any> {
   const { accountId, actionType, targetId, content, metadata } = jobData;
@@ -14,10 +14,11 @@ export async function handlePostAction(jobData: BullJobData): Promise<any> {
   );
 
   try {
+    const firestore = getFirestore();
     // Check kill switch
     const policyDoc = await firestore.collection('automationPolicies').doc('global').get();
     if (policyDoc.exists) {
-      const policy = policyDoc.data();
+      const policy = policyDoc.data() as AutomationPolicy;
       if (!policy.automationEnabled || policy.globalKillSwitch) {
         logger.info({ accountId }, 'Automation disabled via kill switch');
         return { skipped: true, reason: 'Kill switch enabled' };
@@ -51,8 +52,8 @@ export async function handlePostAction(jobData: BullJobData): Promise<any> {
     const usageDoc = `${accountId}_${today}`;
     await firestore.collection('dailyUsage').doc(usageDoc).set(
       {
-        postsCreated: firestore.FieldValue.increment(1),
-        totalActions: firestore.FieldValue.increment(1),
+        postsCreated: FieldValue.increment(1),
+        totalActions: FieldValue.increment(1),
         updatedAt: new Date(),
       },
       { merge: true }
@@ -75,10 +76,11 @@ export async function handleCommentAction(jobData: BullJobData): Promise<any> {
   );
 
   try {
+    const firestore = getFirestore();
     // Check kill switch
     const policyDoc = await firestore.collection('automationPolicies').doc('global').get();
     if (policyDoc.exists) {
-      const policy = policyDoc.data();
+      const policy = policyDoc.data() as AutomationPolicy;
       if (!policy.automationEnabled || policy.globalKillSwitch) {
         logger.info({ accountId }, 'Automation disabled via kill switch');
         return { skipped: true, reason: 'Kill switch enabled' };
@@ -112,8 +114,8 @@ export async function handleCommentAction(jobData: BullJobData): Promise<any> {
     const usageDoc = `${accountId}_${today}`;
     await firestore.collection('dailyUsage').doc(usageDoc).set(
       {
-        commentsCreated: firestore.FieldValue.increment(1),
-        totalActions: firestore.FieldValue.increment(1),
+        commentsCreated: FieldValue.increment(1),
+        totalActions: FieldValue.increment(1),
         updatedAt: new Date(),
       },
       { merge: true }
@@ -136,10 +138,11 @@ export async function handleReactionAction(jobData: BullJobData): Promise<any> {
   );
 
   try {
+    const firestore = getFirestore();
     // Check kill switch
     const policyDoc = await firestore.collection('automationPolicies').doc('global').get();
     if (policyDoc.exists) {
-      const policy = policyDoc.data();
+      const policy = policyDoc.data() as AutomationPolicy;
       if (!policy.automationEnabled || policy.globalKillSwitch) {
         logger.info({ accountId }, 'Automation disabled via kill switch');
         return { skipped: true, reason: 'Kill switch enabled' };
@@ -170,8 +173,8 @@ export async function handleReactionAction(jobData: BullJobData): Promise<any> {
     const usageDoc = `${accountId}_${today}`;
     await firestore.collection('dailyUsage').doc(usageDoc).set(
       {
-        reactionsAdded: firestore.FieldValue.increment(1),
-        totalActions: firestore.FieldValue.increment(1),
+        reactionsAdded: FieldValue.increment(1),
+        totalActions: FieldValue.increment(1),
         updatedAt: new Date(),
       },
       { merge: true }
@@ -195,10 +198,11 @@ export async function handleSchedulerJob(jobData: BullJobData): Promise<any> {
   );
 
   try {
+    const firestore = getFirestore();
     // Check kill switch
     const policyDoc = await firestore.collection('automationPolicies').doc('global').get();
     if (policyDoc.exists) {
-      const policy = policyDoc.data();
+      const policy = policyDoc.data() as AutomationPolicy;
       if (!policy.automationEnabled || policy.globalKillSwitch) {
         logger.info({ accountId }, 'Automation disabled via kill switch');
         return { skipped: true, reason: 'Kill switch enabled' };
@@ -232,6 +236,7 @@ export async function handleQuotaReset(jobData: BullJobData): Promise<any> {
   logger.info('Processing daily quota reset');
 
   try {
+    const firestore = getFirestore();
     const today = new Date().toISOString().split('T')[0];
     const allUsageSnapshot = await firestore
       .collection('dailyUsage')

@@ -1,4 +1,5 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 import { initializeFirebaseAdmin } from '@ai-links/firebase-admin';
 import { initializeLogger } from './lib/logger';
 import { initializeRedis, closeRedis } from './lib/redis';
@@ -13,23 +14,8 @@ import {
 } from './lib/job-handlers';
 import { BullJobType } from '@ai-links/shared-types';
 
-// Initialize environment
-if (!process.env.FIREBASE_PROJECT_ID) {
-  throw new Error('FIREBASE_PROJECT_ID is required');
-}
-if (!process.env.FIREBASE_PRIVATE_KEY) {
-  throw new Error('FIREBASE_PRIVATE_KEY is required');
-}
-if (!process.env.FIREBASE_CLIENT_EMAIL) {
-  throw new Error('FIREBASE_CLIENT_EMAIL is required');
-}
-
 // Initialize Firebase Admin
-initializeFirebaseAdmin(
-  process.env.FIREBASE_PROJECT_ID,
-  process.env.FIREBASE_PRIVATE_KEY,
-  process.env.FIREBASE_CLIENT_EMAIL
-);
+initializeFirebaseAdmin();
 
 // Initialize Logger
 const logger = initializeLogger(process.env.WORKER_LOG_LEVEL || 'info');

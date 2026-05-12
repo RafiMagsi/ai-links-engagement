@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeFirebaseAdmin, getFirestore } from '@ai-links/firebase-admin';
 import { filterEligiblePosts } from '@/lib/comment-generator';
+import { CommentSettings } from '@ai-links/shared-types';
 
-const projectId = process.env.FIREBASE_PROJECT_ID;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+// @ts-ignore - require used intentionally to prevent transpilation
+const { initializeFirebaseAdmin, getFirestore } = require('@ai-links/firebase-admin');
 
-if (projectId && privateKey && clientEmail) {
-  initializeFirebaseAdmin(projectId, privateKey, clientEmail);
-}
+initializeFirebaseAdmin();
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +35,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const settings = settingsRef.data();
+    const settings = settingsRef.data() as CommentSettings;
 
     // Get posts that already have comments from this account
     const existingCommentsSnapshot = await db
@@ -48,7 +45,7 @@ export async function GET(request: NextRequest) {
       .get();
 
     const alreadyCommentedPostIds = existingCommentsSnapshot.docs.map(
-      (doc) => doc.data().postId
+      (doc: any) => doc.data().postId
     );
 
     // In a real implementation, this would fetch posts from LinkedIn via their API
@@ -62,7 +59,7 @@ export async function GET(request: NextRequest) {
       .limit(limit * 2); // Get more to filter
 
     const postsSnapshot = await postsQuery.get();
-    const posts = postsSnapshot.docs.map((doc) => ({
+    const posts = postsSnapshot.docs.map((doc: any) => ({
       id: doc.id,
       ...doc.data(),
     }));
@@ -71,8 +68,8 @@ export async function GET(request: NextRequest) {
     const eligiblePosts = filterEligiblePosts(
       posts,
       {
-        keywords: settings.keywords,
-        allowOnAIGeneratedPosts: settings.allowOnAIGeneratedPosts,
+        keywords: settings.keywords || [],
+        allowOnAIGeneratedPosts: settings.allowOnAIGeneratedPosts ?? false,
       },
       alreadyCommentedPostIds
     ).slice(0, limit);

@@ -1,20 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeFirebaseAdmin, getFirestore } from '@ai-links/firebase-admin';
 import {
   determineReactionType,
   buildReactionReason,
   isWithinDailyReactionLimit,
   hasAccountReactedToPost,
 } from '@/lib/reaction-selector';
-import { OfficialReaction, ReactionType } from '@ai-links/shared-types';
+import { OfficialReaction, ReactionType, ReactionSettings } from '@ai-links/shared-types';
 
-const projectId = process.env.FIREBASE_PROJECT_ID;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+// @ts-ignore - require used intentionally to prevent transpilation
+const { initializeFirebaseAdmin, getFirestore } = require('@ai-links/firebase-admin');
 
-if (projectId && privateKey && clientEmail) {
-  initializeFirebaseAdmin(projectId, privateKey, clientEmail);
-}
+initializeFirebaseAdmin();
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,7 +39,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const settings = settingsDoc.data();
+    const settings = settingsDoc.data() as ReactionSettings;
 
     if (!settings.enabled) {
       return NextResponse.json(
@@ -62,10 +58,11 @@ export async function POST(request: NextRequest) {
       .where('createdAt', '>=', today)
       .get();
 
-    if (!isWithinDailyReactionLimit(todayReactionsSnapshot.size, settings.maxReactionsPerDay)) {
+    const maxReactionsPerDay = settings.maxReactionsPerDay ?? 10;
+    if (!isWithinDailyReactionLimit(todayReactionsSnapshot.size, maxReactionsPerDay)) {
       return NextResponse.json(
         {
-          error: `Daily reaction limit exceeded (${settings.maxReactionsPerDay} per day)`,
+          error: `Daily reaction limit exceeded (${maxReactionsPerDay} per day)`,
         },
         { status: 429 }
       );
@@ -86,12 +83,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine reaction type
+    const allowedTypes = settings.allowedReactionTypes ?? [ReactionType.FEEDBACK_GIVEN];
     const finalReactionType =
       reactionType ||
-      determineReactionType({ engagementScore }, settings.allowedReactionTypes[0]);
+      determineReactionType({ engagementScore }, allowedTypes[0]);
 
     // Validate reaction type is allowed
-    if (!settings.allowedReactionTypes.includes(finalReactionType)) {
+    if (!allowedTypes.includes(finalReactionType)) {
       return NextResponse.json(
         {
           error: `Reaction type ${finalReactionType} not allowed for this account`,

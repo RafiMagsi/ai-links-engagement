@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFirestore } from '@ai-links/firebase-admin';
 import { verifyIdToken } from '@ai-links/firebase-admin';
-import { JobStatus } from '@ai-links/shared-types';
+import { JobStatus, AutomationJob } from '@ai-links/shared-types';
 
 async function verifyAuth(request: NextRequest): Promise<string | null> {
   const authHeader = request.headers.get('authorization');
@@ -46,7 +46,7 @@ export async function POST(
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
 
-    const job = jobDoc.data();
+    const job = jobDoc.data() as AutomationJob;
     const accountDoc = await db
       .collection('automationAccounts')
       .doc(job.accountId)

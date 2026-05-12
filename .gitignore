@@ -54,3 +54,4 @@ turbo.json.bak
 # Firebase
 .firebase/
 .firebaserc
+.config/serviceAccountKey.json

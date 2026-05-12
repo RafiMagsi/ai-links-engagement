@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install *)",
+      "Bash(pnpm --filter shared-types build)",
+      "Bash(pnpm --filter firebase-admin build)",
+      "Bash(pnpm --filter worker dev)",
+      "Bash(node --input-type=module --eval \"import\\('@ai-links/shared-types'\\).then\\(m => console.log\\(Object.keys\\(m\\)\\)\\)\")",
+      "Bash(node --input-type=module --eval \"import\\('@ai-links/shared-types'\\).then\\(m => console.log\\(Object.keys\\(m\\).slice\\(0, 10\\)\\)\\)\")",
+      "Bash(ln -s ../../../.env.local /Users/rafi/developer/ai_development/projects/ai-links-engagement/apps/worker/.env.local)",
+      "Bash(ls -la /Users/rafi/developer/ai_development/projects/ai-links-engagement/apps/worker/.env.local)",
+      "Read(//Users/rafi/developer/ai_development/projects/ai-links-engagement/apps/worker/**)",
+      "Bash(node --input-type=module --eval \"import 'dotenv/config'; console.log\\('FIREBASE_PROJECT_ID:', process.env.FIREBASE_PROJECT_ID ? 'loaded' : 'not loaded'\\)\")",
+      "Bash(node --input-type=module --eval \"import dotenv from 'dotenv'; const result = dotenv.config\\(\\); console.log\\('loaded:', result.parsed ? Object.keys\\(result.parsed\\).length + ' vars' : 'failed'\\); console.log\\('FIREBASE_PROJECT_ID:', process.env.FIREBASE_PROJECT_ID ? 'YES' : 'NO'\\);\")",
+      "Bash(node --input-type=module --eval \"import dotenv from 'dotenv'; const result = dotenv.config\\({ path: '.env.local' }\\); console.log\\('loaded:', result.parsed ? Object.keys\\(result.parsed\\).length + ' vars' : 'failed'\\); console.log\\('FIREBASE_PROJECT_ID:', process.env.FIREBASE_PROJECT_ID ? 'YES' : 'NO'\\);\")",
+      "Bash(redis-cli ping *)",
+      "Bash(node -e \"const admin = require\\('firebase-admin'\\); console.log\\(typeof admin.credential\\); console.log\\(Object.keys\\(admin\\).slice\\(0, 10\\)\\)\")",
+      "Bash(node --input-type=module --eval \"import admin from 'firebase-admin'; console.log\\(admin.credential ? 'credential exists' : 'credential undefined'\\); console.log\\(typeof admin.initializeApp\\);\")",
+      "Bash(node --input-type=module --eval \"import * as admin from 'firebase-admin'; console.log\\(admin.credential ? 'credential exists' : 'credential undefined'\\); console.log\\(typeof admin.initializeApp\\);\")",
+      "Bash(node --input-type=module --eval ' *)",
+      "Bash(pkill -f \"node --input-type\")",
+      "Bash(pnpm --filter admin start)",
+      "Bash(curl -s http://localhost:3000/api/test-firestore)",
+      "Bash(curl -s http://localhost:3001/api/test-firestore)",
+      "Bash(tail -100 /tmp/admin-dev.log | grep -A 5 -B 5 \"ERROR\\\\|error\\\\|Firebase\\\\|firebase\")",
+      "Read(//private/tmp/**)",
+      "Bash(pkill -f \"pnpm.*admin.*dev\")",
+      "Bash(pnpm --filter admin dev)",
+      "Bash(pkill -f \"pnpm.*admin\")",
+      "Bash(GOOGLE_APPLICATION_CREDENTIALS=packages/firebase-admin/serviceAccountKey.json node -r /Users/rafi/developer/ai_development/projects/ai-links-engagement/node_modules/.pnpm/firebase-admin@12.7.0/node_modules/firebase-admin test-firestore-direct.js)",
+      "Bash(GOOGLE_APPLICATION_CREDENTIALS=packages/firebase-admin/serviceAccountKey.json node test-firestore-direct.cjs)",
+      "Bash(pnpm --filter admin build)"
+    ]
+  }
+}

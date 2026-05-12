@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { AutomationComment, CommentStatus } from '@ai-links/shared-types';
@@ -75,8 +77,6 @@ export default function CommentsMonitorPage() {
         return 'bg-green-100 text-green-800';
       case CommentStatus.REJECTED:
         return 'bg-red-100 text-red-800';
-      case CommentStatus.FAILED:
-        return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -122,7 +122,6 @@ export default function CommentsMonitorPage() {
                 <option value={CommentStatus.APPROVED}>Approved</option>
                 <option value={CommentStatus.PUBLISHED}>Published</option>
                 <option value={CommentStatus.REJECTED}>Rejected</option>
-                <option value={CommentStatus.FAILED}>Failed</option>
               </select>
             </div>
           </div>
@@ -168,7 +167,7 @@ export default function CommentsMonitorPage() {
                       Post: {comment.postId}
                     </h3>
                     <p className="text-sm text-gray-500">
-                      Generated: {new Date(comment.generatedAt).toLocaleString()}
+                      Generated: {new Date(comment.generatedAt || comment.createdAt || new Date()).toLocaleString()}
                     </p>
                   </div>
                   <span

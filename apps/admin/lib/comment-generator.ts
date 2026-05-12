@@ -8,16 +8,18 @@ export function validateComment(
   settings: CommentSettings
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
+  const minLength = settings.minCommentLength ?? 50;
+  const maxLength = settings.maxCommentLength ?? 280;
 
-  if (content.length < settings.minCommentLength) {
+  if (content.length < minLength) {
     errors.push(
-      `Comment too short (${content.length} chars, minimum ${settings.minCommentLength})`
+      `Comment too short (${content.length} chars, minimum ${minLength})`
     );
   }
 
-  if (content.length > settings.maxCommentLength) {
+  if (content.length > maxLength) {
     errors.push(
-      `Comment too long (${content.length} chars, maximum ${settings.maxCommentLength})`
+      `Comment too long (${content.length} chars, maximum ${maxLength})`
     );
   }
 

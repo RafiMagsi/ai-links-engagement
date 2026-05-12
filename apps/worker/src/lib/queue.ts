@@ -130,20 +130,14 @@ export async function getQueueMetrics(queueName: string): Promise<QueueMetrics> 
   const queue = await getQueue(queueName);
 
   try {
-    const [pending, active, completed, failed, delayed] = await Promise.all([
-      queue.getJobCounts('pending'),
-      queue.getJobCounts('active'),
-      queue.getJobCounts('completed'),
-      queue.getJobCounts('failed'),
-      queue.getJobCounts('delayed'),
-    ]);
+    const counts = await queue.getJobCounts();
 
     return {
-      pending: pending as number,
-      active: active as number,
-      completed: completed as number,
-      failed: failed as number,
-      delayed: delayed as number,
+      pending: counts.pending ?? 0,
+      active: counts.active ?? 0,
+      completed: counts.completed ?? 0,
+      failed: counts.failed ?? 0,
+      delayed: counts.delayed ?? 0,
     };
   } catch (error) {
     logger.error({ error, queueName }, 'Failed to get queue metrics');
@@ -208,7 +202,7 @@ export async function cleanQueue(queueName: string, state: string): Promise<void
   const queue = await getQueue(queueName);
 
   try {
-    await queue.clean(0, 1000, state);
+    await queue.clean(0, 1000, state as any);
     logger.info({ queueName, state }, 'Queue cleaned');
   } catch (error) {
     logger.error({ error, queueName, state }, 'Failed to clean queue');
@@ -232,7 +226,7 @@ export function registerWorker(
 
   worker.on('failed', (job, err) => {
     logger.error(
-      { jobId: job.id, queueName, error: err.message },
+      { jobId: job?.id, queueName, error: err.message },
       'Job failed'
     );
   });

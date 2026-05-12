@@ -65,31 +65,51 @@ export enum ReactionType {
 
 // Reaction Settings Type
 export interface ReactionSettings {
-  id: string;
+  id?: string;
   accountId: string;
-  allowedReactionTypes: ReactionType[];
-  createdAt: Date;
-  updatedAt: Date;
+  enabled?: boolean;
+  maxReactionsPerDay?: number;
+  maxReactionsPerPost?: number;
+  allowedReactionTypes?: ReactionType[];
+  curateTrendingContent?: boolean;
+  minEngagementScore?: number;
+  keywordWeighting?: Record<string, number>;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 // Official Reaction Type
 export interface OfficialReaction {
-  id: string;
+  id?: string;
   accountId: string;
+  postId?: string;
   reactionType: ReactionType;
-  targetContentId: string;
-  targetProfileUrl: string;
-  createdAt: Date;
+  targetContentId?: string;
+  targetProfileUrl?: string;
+  engagementScore?: number;
+  actorType?: string;
+  isOfficialAction?: boolean;
+  actionReason?: string;
+  createdAt?: Date;
 }
 
 // Comment Settings Type
 export interface CommentSettings {
-  id: string;
+  id?: string;
   accountId: string;
+  enabled?: boolean;
+  maxCommentsPerDay?: number;
+  minTimeBetweenComments?: number;
+  minCommentLength?: number;
+  maxCommentLength?: number;
+  requireApproval?: boolean;
+  allowOnAIGeneratedPosts?: boolean;
+  keywords?: string[];
+  tone?: string;
   commentTemplate?: string;
-  autoCommentEnabled: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  autoCommentEnabled?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 // Automation Schedule Type
@@ -212,8 +232,47 @@ export interface AdminCustomClaims {
   permissions?: string[];
 }
 
-// Re-export validation schemas
-export * from './schemas';
+// Error Code Type
+export enum ErrorCode {
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  FORBIDDEN = 'FORBIDDEN',
+  NOT_FOUND = 'NOT_FOUND',
+  INVALID_REQUEST = 'INVALID_REQUEST',
+  INTERNAL_ERROR = 'INTERNAL_ERROR',
+  QUOTA_EXCEEDED = 'QUOTA_EXCEEDED',
+  FIREBASE_ERROR = 'FIREBASE_ERROR',
+  VALIDATION_ERROR = 'VALIDATION_ERROR'
+}
+
+// Comment Status Type
+export enum CommentStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  PUBLISHED = 'published'
+}
+
+// AutomationComment Type
+export interface AutomationComment {
+  id?: string;
+  accountId: string;
+  content: string;
+  status: CommentStatus;
+  postId?: string;
+  targetPostId?: string;
+  targetProfileUrl?: string;
+  generatedBy?: 'ai' | 'manual';
+  generatedAt?: Date;
+  actorType?: string;
+  isOfficialAction?: boolean;
+  rejectedReason?: string;
+  publishedAt?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+// Schemas are in separate file to avoid circular imports
+// They can be imported directly from '@ai-links/shared-types/schemas' if needed
 
 // Global Automation Policy Type
 export interface AutomationPolicy {

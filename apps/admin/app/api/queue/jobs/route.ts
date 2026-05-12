@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(url.searchParams.get('offset') || '0', 10);
 
     // Query automationActionLogs instead (which stores job execution records)
-    let query = firestore.collection('automationActionLogs');
+    let query = firestore.collection('automationActionLogs') as any;
 
     if (status === 'failed') {
       query = query.where('success', '==', false);
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       .offset(offset)
       .get();
 
-    const jobs = snapshot.docs.map((doc) => ({
+    const jobs = snapshot.docs.map((doc: any) => ({
       id: doc.id,
       ...doc.data(),
       createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,

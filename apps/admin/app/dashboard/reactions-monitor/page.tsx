@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { OfficialReaction, ReactionType } from '@ai-links/shared-types';
@@ -177,7 +179,7 @@ export default function ReactionsMonitorPage() {
                       Post: {reaction.postId}
                     </h3>
                     <p className="text-sm text-gray-500">
-                      Created: {new Date(reaction.createdAt).toLocaleString()}
+                      Created: {new Date(reaction.createdAt || new Date()).toLocaleString()}
                     </p>
                   </div>
                   <span

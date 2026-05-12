@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
@@ -18,6 +20,7 @@ export default function UsagePage() {
 
     async function fetchUsage() {
       try {
+        if (!user) return;
         const token = await user.getIdToken();
         const response = await fetch(`/api/usage?days=${days}`, {
           headers: {

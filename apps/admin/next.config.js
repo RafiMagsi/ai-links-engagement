@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  transpilePackages: ['@ai-links/shared-types', '@ai-links/firebase-admin'],
+  transpilePackages: ['@ai-links/shared-types'],
 };
 
 module.exports = nextConfig;

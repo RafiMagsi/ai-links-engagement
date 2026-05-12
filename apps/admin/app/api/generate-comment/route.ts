@@ -1,19 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeFirebaseAdmin, getFirestore } from '@ai-links/firebase-admin';
 import {
   generateCommentPrompt,
   validateComment,
   canCommentNow,
 } from '@/lib/comment-generator';
-import { CommentStatus, AutomationComment } from '@ai-links/shared-types';
+import { CommentStatus, AutomationComment, CommentSettings } from '@ai-links/shared-types';
 
-const projectId = process.env.FIREBASE_PROJECT_ID;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+// @ts-ignore - require used intentionally to prevent transpilation
+const { initializeFirebaseAdmin, getFirestore } = require('@ai-links/firebase-admin');
 
-if (projectId && privateKey && clientEmail) {
-  initializeFirebaseAdmin(projectId, privateKey, clientEmail);
-}
+initializeFirebaseAdmin();
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,7 +38,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const settings = settingsDoc.data();
+    const settings = settingsDoc.data() as CommentSettings;
 
     // Check if already commented on this post
     const existingComment = await db
@@ -73,13 +69,14 @@ export async function POST(request: NextRequest) {
       lastCommentTime = lastCommentSnapshot.docs[0].data().publishedAt;
     }
 
-    if (!canCommentNow(lastCommentTime, settings.minTimeBetweenComments)) {
+    const minTimeBetweenComments = settings.minTimeBetweenComments ?? 45;
+    if (!canCommentNow(lastCommentTime, minTimeBetweenComments)) {
       const minutesWaited = lastCommentTime
         ? Math.floor(
             (Date.now() - lastCommentTime.getTime()) / (1000 * 60)
           )
         : 0;
-      const minutesNeeded = settings.minTimeBetweenComments - minutesWaited;
+      const minutesNeeded = minTimeBetweenComments - minutesWaited;
 
       return NextResponse.json(
         {

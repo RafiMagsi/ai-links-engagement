@@ -18,15 +18,16 @@ export function scorePost(
   keywords?: string[]
 ): number {
   let score = 0;
+  const minEngagement = settings.minEngagementScore ?? 20;
 
   // Base engagement score (likes + comments + shares)
   const engagement = (post.likesCount || 0) + (post.commentsCount || 0) + (post.sharesCount || 0);
-  if (engagement < settings.minEngagementScore) {
+  if (engagement < minEngagement) {
     return -1; // Not eligible
   }
 
   // Engagement component (0-50 points)
-  score += Math.min(50, (engagement / settings.minEngagementScore) * 25);
+  score += Math.min(50, (engagement / minEngagement) * 25);
 
   // Recency component (0-30 points)
   const hoursOld = (Date.now() - new Date(post.createdAt).getTime()) / (1000 * 60 * 60);
@@ -157,6 +158,7 @@ export function filterReactionEligiblePosts(
   settings: ReactionSettings,
   alreadyReactedPostIds: string[]
 ): any[] {
+  const minEngagement = settings.minEngagementScore ?? 20;
   return posts.filter((post) => {
     // Don't react twice on same post
     if (alreadyReactedPostIds.includes(post.id)) {
@@ -165,7 +167,7 @@ export function filterReactionEligiblePosts(
 
     // Check minimum engagement
     const engagement = (post.likesCount || 0) + (post.commentsCount || 0);
-    if (engagement < settings.minEngagementScore) {
+    if (engagement < minEngagement) {
       return false;
     }
 

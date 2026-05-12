@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
@@ -18,6 +20,7 @@ export default function DashboardPage() {
 
     async function fetchDashboardData() {
       try {
+        if (!user) return;
         const token = await user.getIdToken();
 
         // Fetch usage

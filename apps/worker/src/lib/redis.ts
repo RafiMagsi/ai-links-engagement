@@ -14,10 +14,9 @@ export async function initializeRedis(): Promise<ReturnType<typeof createClient>
   const redisPassword = process.env.REDIS_PASSWORD;
 
   client = createClient({
-    host: redisHost,
-    port: redisPort,
-    password: redisPassword || undefined,
     socket: {
+      host: redisHost,
+      port: redisPort,
       reconnectStrategy: (retries) => {
         if (retries > 10) {
           logger.error('Redis reconnection failed after 10 attempts');
@@ -26,6 +25,7 @@ export async function initializeRedis(): Promise<ReturnType<typeof createClient>
         return Math.min(retries * 50, 500);
       },
     },
+    password: redisPassword || undefined,
   });
 
   client.on('error', (err) => {

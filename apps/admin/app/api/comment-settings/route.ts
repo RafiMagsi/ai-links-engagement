@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeFirebaseAdmin, getFirestore } from '@ai-links/firebase-admin';
 import { CommentSettings } from '@ai-links/shared-types';
 
-// Initialize Firebase Admin on first call
-const projectId = process.env.FIREBASE_PROJECT_ID;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+// @ts-ignore - require used intentionally to prevent transpilation
+const { initializeFirebaseAdmin, getFirestore } = require('@ai-links/firebase-admin');
 
-if (projectId && privateKey && clientEmail) {
-  initializeFirebaseAdmin(projectId, privateKey, clientEmail);
-}
+initializeFirebaseAdmin();
 
 export async function POST(request: NextRequest) {
   try {

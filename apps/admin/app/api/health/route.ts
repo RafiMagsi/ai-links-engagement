@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSuccessResponse, createErrorResponse, ErrorCode } from '@ai-links/shared-types';
+import { ErrorCode } from '@ai-links/shared-types';
 
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -103,7 +103,7 @@ export async function GET() {
       {
         success: false,
         error: {
-          code: ErrorCode.INTERNAL_SERVER_ERROR,
+          code: ErrorCode.INTERNAL_ERROR,
           message: 'Health check failed',
           details: { error: errorMessage },
         },
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
       {
         success: false,
         error: {
-          code: ErrorCode.INTERNAL_SERVER_ERROR,
+          code: ErrorCode.INTERNAL_ERROR,
           message: 'Deep health check failed',
           details: { error: errorMessage },
         },

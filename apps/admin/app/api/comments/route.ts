@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeFirebaseAdmin, getFirestore } from '@ai-links/firebase-admin';
 import { AutomationComment, CommentStatus } from '@ai-links/shared-types';
 
-const projectId = process.env.FIREBASE_PROJECT_ID;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+// @ts-ignore - require used intentionally to prevent transpilation
+const { initializeFirebaseAdmin, getFirestore } = require('@ai-links/firebase-admin');
 
-if (projectId && privateKey && clientEmail) {
-  initializeFirebaseAdmin(projectId, privateKey, clientEmail);
-}
+initializeFirebaseAdmin();
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,7 +32,7 @@ export async function GET(request: NextRequest) {
     }
 
     const snapshot = await query.get();
-    const comments = snapshot.docs.map((doc) => ({
+    const comments = snapshot.docs.map((doc: any) => ({
       id: doc.id,
       ...doc.data(),
     })) as (AutomationComment & { id: string })[];

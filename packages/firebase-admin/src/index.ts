@@ -1,54 +1,79 @@
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Initialize Firebase Admin SDK
-let adminApp: admin.app.App;
+let adminApp: admin.app.App | undefined;
 
-export function initializeFirebaseAdmin(
-  projectId: string,
-  privateKey: string,
-  clientEmail: string,
-  databaseUrl?: string
-): admin.app.App {
+function loadCredential() {
+  const candidatePaths: string[] = [];
+
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    candidatePaths.push(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+  }
+  candidatePaths.push(path.join(process.cwd(), '.config/serviceAccountKey.json'));
+  candidatePaths.push(path.resolve(__dirname, '../../.config/serviceAccountKey.json'));
+
+  console.log('[Firebase] Looking for credentials in:', candidatePaths);
+
+  for (const candidatePath of candidatePaths) {
+    if (fs.existsSync(candidatePath)) {
+      console.log('[Firebase] Found credentials at:', candidatePath);
+      const serviceAccount = require(candidatePath);
+      return admin.credential.cert(serviceAccount);
+    }
+  }
+
+  console.log('[Firebase] Using applicationDefault() credentials');
+  return admin.credential.applicationDefault();
+}
+
+export function initializeFirebaseAdmin(): admin.app.App {
   if (adminApp) {
     return adminApp;
   }
 
-  const serviceAccount = {
-    projectId,
-    privateKey: privateKey.replace(/\\n/g, '\n'),
-    clientEmail,
-  };
+  if (admin.apps.length > 0) {
+    return admin.app();
+  }
+
+  console.log('[Firebase] Initializing Firebase Admin SDK');
 
   adminApp = admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
-    databaseURL: databaseUrl,
+    credential: loadCredential(),
   });
 
+  console.log('[Firebase] App initialized successfully');
+
+  const db = adminApp.firestore();
+  db.settings({
+    ignoreUndefinedProperties: true,
+    preferRest: true,
+  });
+
+  console.log('[Firebase] Firestore configured (preferRest: true)');
+
   return adminApp;
-}
-
-// Auto-initialize from environment variables if available
-function autoInitialize(): void {
-  if (adminApp) return;
-
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const databaseUrl = process.env.FIREBASE_DATABASE_URL;
-
-  if (projectId && privateKey && clientEmail) {
-    initializeFirebaseAdmin(projectId, privateKey, clientEmail, databaseUrl);
-  }
 }
 
 // Auto-initialize on module load
-autoInitialize();
+try {
+  initializeFirebaseAdmin();
+} catch (error) {
+  console.warn('[Firebase] Initialization deferred:', (error as any).message);
+}
 
 export function getFirebaseAdmin(): admin.app.App {
-  if (!adminApp) {
-    throw new Error('Firebase Admin SDK not initialized. Call initializeFirebaseAdmin first.');
+  if (adminApp) {
+    return adminApp;
   }
-  return adminApp;
+
+  if (admin.apps.length > 0) {
+    adminApp = admin.app();
+    return adminApp;
+  }
+
+  throw new Error('Firebase Admin SDK not initialized.');
 }
 
 // Convenience exports
@@ -89,11 +114,14 @@ export async function createUser(
 
 // Database helpers
 export function getDatabase(): admin.database.Database {
-  const db = getFirebaseAdmin().database();
-  if (!db) {
-    throw new Error('Firebase Realtime Database not available');
+  const databaseUrl = process.env.FIREBASE_DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error(
+      'FIREBASE_DATABASE_URL is missing. This is required only for Firebase Realtime Database. Use getFirestore() for Cloud Firestore.'
+    );
   }
-  return db;
+
+  return getFirebaseAdmin().database();
 }
 
 export function getFirestore(): admin.firestore.Firestore {

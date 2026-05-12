@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .get();
 
-    const jobs = snapshot.docs.map((doc) => ({
+    const jobs = snapshot.docs.map((doc: any) => ({
       id: doc.id,
       ...doc.data(),
     }));

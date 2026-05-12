@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { ReactionSettings, ReactionType } from '@ai-links/shared-types';
@@ -41,7 +43,13 @@ export default function ReactionSettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accountId]);
+
+  useEffect(() => {
+    if (accountId) {
+      fetchSettings();
+    }
+  }, [accountId, fetchSettings]);
 
   const handleSave = async () => {
     try {
@@ -67,7 +75,7 @@ export default function ReactionSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [accountId]);
+  };
 
   useEffect(() => {
     if (accountId) {
@@ -76,7 +84,7 @@ export default function ReactionSettingsPage() {
   }, [accountId, fetchSettings]);
 
   const toggleReactionType = (type: ReactionType) => {
-    const types = settings.allowedReactionTypes;
+    const types = settings.allowedReactionTypes || [];
     if (types.includes(type)) {
       setSettings({
         ...settings,
@@ -221,7 +229,7 @@ export default function ReactionSettingsPage() {
                     <label key={type} className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={settings.allowedReactionTypes.includes(type)}
+                        checked={(settings.allowedReactionTypes || []).includes(type)}
                         onChange={() => toggleReactionType(type)}
                         className="mr-3"
                       />
