@@ -110,9 +110,6 @@ jobs:
           ssh-keyscan -p ${{ secrets.DEPLOY_PORT || 22 }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Deploy to HestiaCP server
-        env:
-          FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
-          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
         run: |
           ssh -p ${{ secrets.DEPLOY_PORT || 22 }} ${{ env.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'DEPLOY_SCRIPT'
             set -e
@@ -133,6 +130,13 @@ jobs:
               echo "Initializing git repository..."
               git init
               git remote add origin ${{ github.server_url }}/${{ github.repository }}.git
+            fi
+
+            # Check if credentials file exists
+            if [ ! -f .config/serviceAccountKey.json ]; then
+              echo "⚠️  CRITICAL: .config/serviceAccountKey.json not found!"
+              echo "Create it manually on the server with your Firebase service account key"
+              exit 1
             fi
 
             # Pull latest changes
