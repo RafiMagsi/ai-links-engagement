@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "pnpm --filter admin dev",
     "dev:all": "concurrently \"pnpm --filter admin dev\" \"pnpm --filter worker dev\"",
-    "build": "pnpm --filter admin build && pnpm --filter worker build",
+    "build": "pnpm --filter shared-types build && pnpm --filter firebase-admin build && pnpm --filter admin build && pnpm --filter worker build",
     "build:admin": "pnpm --filter admin build",
     "build:worker": "pnpm --filter worker build",
     "start": "pm2 start ecosystem.config.js",
