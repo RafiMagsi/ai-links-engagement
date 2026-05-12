@@ -7,9 +7,9 @@ import {
   AutomationKeywords,
   ActionType,
 } from '@ai-links/shared-types';
-import { getLogger } from './logger';
-import { contentGenerator } from './content-generator';
-import { quotaEngine } from './quota-engine';
+import { getLogger } from './logger.js';
+import { contentGenerator } from './content-generator.js';
+import { quotaEngine } from './quota-engine.js';
 
 class JobProcessor {
   private logger = getLogger();

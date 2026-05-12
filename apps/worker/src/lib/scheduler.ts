@@ -1,5 +1,5 @@
-import { getLogger } from './logger';
-import { addRepeatingJob, QUEUE_NAMES } from './queue';
+import { getLogger } from './logger.js';
+import { addRepeatingJob, QUEUE_NAMES } from './queue.js';
 import { BullJobType, BullJobData } from '@ai-links/shared-types';
 
 const logger = getLogger();

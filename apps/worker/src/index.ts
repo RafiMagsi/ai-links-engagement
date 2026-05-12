@@ -1,17 +1,17 @@
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 import { initializeFirebaseAdmin } from '@ai-links/firebase-admin';
-import { initializeLogger } from './lib/logger';
-import { initializeRedis, closeRedis } from './lib/redis';
-import { initializeQueues, registerWorker, closeQueues, QUEUE_NAMES } from './lib/queue';
-import { setupSchedulers } from './lib/scheduler';
+import { initializeLogger } from './lib/logger.js';
+import { initializeRedis, closeRedis } from './lib/redis.js';
+import { initializeQueues, registerWorker, closeQueues, QUEUE_NAMES } from './lib/queue.js';
+import { setupSchedulers } from './lib/scheduler.js';
 import {
   handlePostAction,
   handleCommentAction,
   handleReactionAction,
   handleSchedulerJob,
   handleQuotaReset,
-} from './lib/job-handlers';
+} from './lib/job-handlers.js';
 import { BullJobType } from '@ai-links/shared-types';
 
 // Initialize Firebase Admin

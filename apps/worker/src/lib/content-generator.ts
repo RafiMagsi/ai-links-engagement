@@ -1,6 +1,6 @@
 import { OpenAI } from 'openai';
 import { AutomationKeywords, TonePreset, ContentIntent } from '@ai-links/shared-types';
-import { getLogger } from './logger';
+import { getLogger } from './logger.js';
 import { z } from 'zod';
 
 const GeneratedContentSchema = z.object({

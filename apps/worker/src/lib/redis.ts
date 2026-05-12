@@ -1,5 +1,5 @@
 import { createClient } from 'redis';
-import { getLogger } from './logger';
+import { getLogger } from './logger.js';
 
 const logger = getLogger();
 let client: ReturnType<typeof createClient> | null = null;

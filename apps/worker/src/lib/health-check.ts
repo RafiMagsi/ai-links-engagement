@@ -3,7 +3,7 @@
  * Monitor worker health and dependencies
  */
 
-import { getLogger } from './logger';
+import { getLogger } from './logger.js';
 import type { Queue } from 'bullmq';
 
 interface HealthStatus {

@@ -1,6 +1,6 @@
 import { getFirestore } from '@ai-links/firebase-admin';
 import { DailyUsage } from '@ai-links/shared-types';
-import { getLogger } from './logger';
+import { getLogger } from './logger.js';
 
 interface QuotaLimits {
   dailyPostLimit: number;

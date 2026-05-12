@@ -1,7 +1,7 @@
 import { Queue, Worker, QueueEvents } from 'bullmq';
 import { BullJobType, BullJobData, QueueMetrics } from '@ai-links/shared-types';
-import { getRedisConnection } from './redis';
-import { getLogger } from './logger';
+import { getRedisConnection } from './redis.js';
+import { getLogger } from './logger.js';
 
 const logger = getLogger();
 const redisConnection = getRedisConnection();

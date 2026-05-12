@@ -1,5 +1,5 @@
 import { getFirestore } from '@ai-links/firebase-admin';
-import { getLogger } from './logger';
+import { getLogger } from './logger.js';
 import { BullJobData, ActionType, AutomationPolicy } from '@ai-links/shared-types';
 import { FieldValue } from 'firebase-admin/firestore';
 
