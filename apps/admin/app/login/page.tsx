@@ -32,11 +32,13 @@ export default function LoginPage() {
 
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
-      const idTokenResult = await result.user.getIdTokenResult();
 
-      if (idTokenResult.claims?.admin !== true) {
-        await auth.signOut();
-        setError('You do not have admin privileges');
+      if (process.env.NODE_ENV !== 'development') {
+        const idTokenResult = await result.user.getIdTokenResult();
+        if (idTokenResult.claims?.admin !== true) {
+          await auth.signOut();
+          setError('You do not have admin privileges');
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign in');
@@ -52,11 +54,13 @@ export default function LoginPage() {
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      const idTokenResult = await result.user.getIdTokenResult();
 
-      if (idTokenResult.claims?.admin !== true) {
-        await auth.signOut();
-        setError('You do not have admin privileges');
+      if (process.env.NODE_ENV !== 'development') {
+        const idTokenResult = await result.user.getIdTokenResult();
+        if (idTokenResult.claims?.admin !== true) {
+          await auth.signOut();
+          setError('You do not have admin privileges');
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign in with Google');

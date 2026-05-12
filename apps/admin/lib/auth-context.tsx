@@ -25,20 +25,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         setError(null);
         if (currentUser) {
-          // Get the ID token with custom claims
-          const idTokenResult = await currentUser.getIdTokenResult();
-          const customClaims = idTokenResult.claims;
-
-          // Check for admin custom claims
-          const hasAdminClaim = customClaims?.admin === true;
-          setIsAdmin(hasAdminClaim);
-
-          if (!hasAdminClaim) {
-            setError('Not authorized as admin');
-            await signOut(auth);
-            setUser(null);
-          } else {
+          // In development, allow any logged-in user
+          if (process.env.NODE_ENV === 'development') {
             setUser(currentUser);
+            setIsAdmin(true);
+          } else {
+            // Get the ID token with custom claims
+            const idTokenResult = await currentUser.getIdTokenResult();
+            const customClaims = idTokenResult.claims;
+
+            // Check for admin custom claims
+            const hasAdminClaim = customClaims?.admin === true;
+            setIsAdmin(hasAdminClaim);
+
+            if (!hasAdminClaim) {
+              setError('Not authorized as admin');
+              await signOut(auth);
+              setUser(null);
+            } else {
+              setUser(currentUser);
+            }
           }
         } else {
           setUser(null);

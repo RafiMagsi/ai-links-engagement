@@ -27,6 +27,23 @@ export function initializeFirebaseAdmin(
   return adminApp;
 }
 
+// Auto-initialize from environment variables if available
+function autoInitialize(): void {
+  if (adminApp) return;
+
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const databaseUrl = process.env.FIREBASE_DATABASE_URL;
+
+  if (projectId && privateKey && clientEmail) {
+    initializeFirebaseAdmin(projectId, privateKey, clientEmail, databaseUrl);
+  }
+}
+
+// Auto-initialize on module load
+autoInitialize();
+
 export function getFirebaseAdmin(): admin.app.App {
   if (!adminApp) {
     throw new Error('Firebase Admin SDK not initialized. Call initializeFirebaseAdmin first.');

@@ -30,6 +30,12 @@ async function verifyAuth(request: NextRequest): Promise<string | null> {
   }
 
   const token = authHeader.substring(7);
+
+  // In development, accept any Bearer token
+  if (process.env.NODE_ENV === 'development') {
+    return 'dev-user';
+  }
+
   try {
     const decoded = await verifyIdToken(token);
     return decoded.uid;
@@ -53,21 +59,29 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const db = getFirestore();
+    try {
+      const db = getFirestore();
 
-    // Verify account ownership
-    const accountDoc = await db.collection('automationAccounts').doc(accountId).get();
-    if (!accountDoc.exists || accountDoc.data()?.userId !== userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      // Verify account ownership
+      const accountDoc = await db.collection('automationAccounts').doc(accountId).get();
+      if (!accountDoc.exists || accountDoc.data()?.userId !== userId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+
+      const scheduleDoc = await db.collection('automationSchedules').doc(accountId).get();
+
+      if (!scheduleDoc.exists) {
+        return NextResponse.json({ schedule: null });
+      }
+
+      return NextResponse.json({ schedule: scheduleDoc.data() });
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      if (process.env.NODE_ENV === 'development') {
+        return NextResponse.json({ schedule: null });
+      }
+      throw dbError;
     }
-
-    const scheduleDoc = await db.collection('automationSchedules').doc(accountId).get();
-
-    if (!scheduleDoc.exists) {
-      return NextResponse.json({ schedule: null });
-    }
-
-    return NextResponse.json({ schedule: scheduleDoc.data() });
   } catch (error) {
     console.error('Error fetching schedule:', error);
     return NextResponse.json(

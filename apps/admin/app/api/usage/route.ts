@@ -10,6 +10,12 @@ async function verifyAuth(request: NextRequest): Promise<string | null> {
   }
 
   const token = authHeader.substring(7);
+
+  // In development, accept any Bearer token
+  if (process.env.NODE_ENV === 'development') {
+    return 'dev-user';
+  }
+
   try {
     const decoded = await verifyIdToken(token);
     return decoded.uid;
@@ -31,35 +37,44 @@ export async function GET(request: NextRequest) {
     }
 
     const days = parseInt(request.nextUrl.searchParams.get('days') || '7', 10);
-    const db = getFirestore();
 
-    // Get usage for the last N days
-    const usageHistory: DailyUsage[] = [];
-    const today = new Date();
+    try {
+      const db = getFirestore();
 
-    for (let i = 0; i < days; i++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
+      // Get usage for the last N days
+      const usageHistory: DailyUsage[] = [];
+      const today = new Date();
 
-      const doc = await db.collection('automationDailyUsage').doc(dateStr).get();
-      if (doc.exists) {
-        usageHistory.push(doc.data() as DailyUsage);
+      for (let i = 0; i < days; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+
+        const doc = await db.collection('automationDailyUsage').doc(dateStr).get();
+        if (doc.exists) {
+          usageHistory.push(doc.data() as DailyUsage);
+        }
       }
+
+      // Get today's usage
+      const todayUsageDoc = await db
+        .collection('automationDailyUsage')
+        .doc(getTodayDate())
+        .get();
+
+      let todayUsage: DailyUsage | null = null;
+      if (todayUsageDoc.exists) {
+        todayUsage = todayUsageDoc.data() as DailyUsage;
+      }
+
+      return NextResponse.json({ todayUsage, usageHistory });
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      if (process.env.NODE_ENV === 'development') {
+        return NextResponse.json({ todayUsage: null, usageHistory: [] });
+      }
+      throw dbError;
     }
-
-    // Get today's usage
-    const todayUsageDoc = await db
-      .collection('automationDailyUsage')
-      .doc(getTodayDate())
-      .get();
-
-    let todayUsage: DailyUsage | null = null;
-    if (todayUsageDoc.exists) {
-      todayUsage = todayUsageDoc.data() as DailyUsage;
-    }
-
-    return NextResponse.json({ todayUsage, usageHistory });
   } catch (error) {
     console.error('Error fetching usage:', error);
     return NextResponse.json(
