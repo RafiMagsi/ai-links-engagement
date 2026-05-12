@@ -13,6 +13,7 @@ out/
 build/
 dist/
 *.tsbuildinfo
+firebase/
 
 # Environment variables (never commit these!)
 .env
