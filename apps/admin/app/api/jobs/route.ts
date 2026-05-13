@@ -24,6 +24,10 @@ type CreateJobInput = z.infer<typeof CreateJobSchema>;
 async function verifyAuth(request: NextRequest): Promise<string | null> {
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
+    // In development, accept requests without auth for testing
+    if (process.env.NODE_ENV === 'development') {
+      return 'dev-user';
+    }
     return null;
   }
 
@@ -32,6 +36,10 @@ async function verifyAuth(request: NextRequest): Promise<string | null> {
     const decoded = await verifyIdToken(token);
     return decoded.uid;
   } catch {
+    // In development, accept any Bearer token
+    if (process.env.NODE_ENV === 'development') {
+      return 'dev-user';
+    }
     return null;
   }
 }
@@ -56,10 +64,17 @@ export async function GET(request: NextRequest) {
 
     const db = getFirestore();
 
-    // Verify account ownership
+    // Verify account existence (in development, skip ownership check)
     const accountDoc = await db.collection('automationAccounts').doc(accountId).get();
-    if (!accountDoc.exists || accountDoc.data()?.userId !== userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!accountDoc.exists) {
+      return NextResponse.json({ error: 'Account not found' }, { status: 404 });
+    }
+
+    // In production, verify ownership. In development, allow access to any account
+    if (process.env.NODE_ENV !== 'development') {
+      if (accountDoc.data()?.userId !== userId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
     }
 
     let query = db
@@ -102,10 +117,17 @@ export async function POST(request: NextRequest) {
 
     const db = getFirestore();
 
-    // Verify account ownership
+    // Verify account existence
     const accountDoc = await db.collection('automationAccounts').doc(data.accountId).get();
-    if (!accountDoc.exists || accountDoc.data()?.userId !== userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!accountDoc.exists) {
+      return NextResponse.json({ error: 'Account not found' }, { status: 404 });
+    }
+
+    // In production, verify ownership. In development, allow access to any account
+    if (process.env.NODE_ENV !== 'development') {
+      if (accountDoc.data()?.userId !== userId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
     }
 
     const jobId = db.collection('automationJobs').doc().id;

@@ -3,7 +3,30 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-const { getFirestore } = require('@ai-links/firebase-admin');
+const { getFirestore, verifyIdToken } = require('@ai-links/firebase-admin');
+
+async function verifyAuth(request: NextRequest): Promise<string | null> {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    // In development, accept requests without auth for testing
+    if (process.env.NODE_ENV === 'development') {
+      return 'dev-user';
+    }
+    return null;
+  }
+
+  const token = authHeader.substring(7);
+  try {
+    const decoded = await verifyIdToken(token);
+    return decoded.uid;
+  } catch {
+    // In development, accept any Bearer token
+    if (process.env.NODE_ENV === 'development') {
+      return 'dev-user';
+    }
+    return null;
+  }
+}
 
 const UpdateAccountDetailsSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -19,6 +42,11 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const userId = await verifyAuth(request);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const accountId = params.id;
     const body = await request.json();
 
@@ -38,6 +66,7 @@ export async function POST(
 
     const accountData = {
       ...data,
+      userId,
       updatedAt: new Date(),
       ...(doc.exists ? {} : {
         createdAt: new Date(),
