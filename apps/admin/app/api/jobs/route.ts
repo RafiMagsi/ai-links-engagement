@@ -77,6 +77,29 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // In development, return jobs without Firestore index requirement
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        // Try simple query without orderBy
+        const snapshot = await db
+          .collection('automationJobs')
+          .where('accountId', '==', accountId)
+          .limit(limit)
+          .get();
+
+        const jobs = snapshot.docs.map((doc: any) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        return NextResponse.json({ jobs });
+      } catch (err) {
+        // If Firestore fails, return empty jobs in dev mode
+        console.log('Firestore query failed in dev mode, returning empty jobs');
+        return NextResponse.json({ jobs: [] });
+      }
+    }
+
     let query = db
       .collection('automationJobs')
       .where('accountId', '==', accountId);
