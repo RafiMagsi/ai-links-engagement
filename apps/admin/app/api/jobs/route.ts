@@ -64,40 +64,31 @@ export async function GET(request: NextRequest) {
 
     const db = getFirestore();
 
-    // Verify account existence (in development, skip ownership check)
+    // Verify account exists (for admin dashboard, allow access to any account if authenticated)
     const accountDoc = await db.collection('automationAccounts').doc(accountId).get();
     if (!accountDoc.exists) {
       return NextResponse.json({ error: 'Account not found' }, { status: 404 });
     }
 
-    // In production, verify ownership. In development, allow access to any account
-    if (process.env.NODE_ENV !== 'development') {
-      if (accountDoc.data()?.userId !== userId) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    }
+    // Return jobs without Firestore index requirement
+    try {
+      // Try simple query without orderBy
+      const snapshot = await db
+        .collection('automationJobs')
+        .where('accountId', '==', accountId)
+        .limit(limit)
+        .get();
 
-    // In development, return jobs without Firestore index requirement
-    if (process.env.NODE_ENV === 'development') {
-      try {
-        // Try simple query without orderBy
-        const snapshot = await db
-          .collection('automationJobs')
-          .where('accountId', '==', accountId)
-          .limit(limit)
-          .get();
+      const jobs = snapshot.docs.map((doc: any) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-        const jobs = snapshot.docs.map((doc: any) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        return NextResponse.json({ jobs });
-      } catch (err) {
-        // If Firestore fails, return empty jobs in dev mode
-        console.log('Firestore query failed in dev mode, returning empty jobs');
-        return NextResponse.json({ jobs: [] });
-      }
+      return NextResponse.json({ jobs });
+    } catch (err) {
+      // If Firestore fails, return empty jobs
+      console.log('Firestore query failed, returning empty jobs', err);
+      return NextResponse.json({ jobs: [] });
     }
 
     let query = db
@@ -140,17 +131,10 @@ export async function POST(request: NextRequest) {
 
     const db = getFirestore();
 
-    // Verify account existence
+    // Verify account exists (for admin dashboard, allow access to any account if authenticated)
     const accountDoc = await db.collection('automationAccounts').doc(data.accountId).get();
     if (!accountDoc.exists) {
       return NextResponse.json({ error: 'Account not found' }, { status: 404 });
-    }
-
-    // In production, verify ownership. In development, allow access to any account
-    if (process.env.NODE_ENV !== 'development') {
-      if (accountDoc.data()?.userId !== userId) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
     }
 
     const jobId = db.collection('automationJobs').doc().id;
