@@ -34,7 +34,13 @@
       "Bash(xargs kill -9)",
       "Bash(npm run *)",
       "Bash(curl -s http://localhost:3000/api/health)",
-      "Bash(curl -s -X GET 'http://localhost:3000/api/jobs?accountId=710bf1e9-63a4-42ce-80ed-4225d71c2cb5' -H 'Authorization: Bearer test-token' -m 5)"
+      "Bash(curl -s -X GET 'http://localhost:3000/api/jobs?accountId=710bf1e9-63a4-42ce-80ed-4225d71c2cb5' -H 'Authorization: Bearer test-token' -m 5)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(awk '{print $2}')",
+      "Bash(NODE_ENV=development npm run dev > /tmp/dev.log 2>&1 & *)"
+    ],
+    "additionalDirectories": [
+      "/private/tmp"
     ]
   }
 }

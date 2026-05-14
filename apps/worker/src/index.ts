@@ -12,6 +12,7 @@ import {
   handleSchedulerJob,
   handleQuotaReset,
 } from './lib/job-handlers.js';
+import { automationJobProcessor } from './lib/automation-job-processor.js';
 import { BullJobType } from '@ai-links/shared-types';
 
 // Initialize Firebase Admin
@@ -67,6 +68,10 @@ async function startWorker() {
     logger.info('Setting up schedulers...');
     await setupSchedulers();
 
+    // Start automation job processor
+    logger.info('Starting automation job processor...');
+    await automationJobProcessor.start();
+
     logger.info('Worker started successfully, ready to process jobs');
   } catch (error) {
     logger.error({ error }, 'Failed to start worker');
@@ -81,6 +86,7 @@ async function shutdown(signal: string) {
   logger.info(`${signal} received, shutting down gracefully...`);
 
   try {
+    await automationJobProcessor.stop();
     await closeQueues();
     await closeRedis();
     logger.info('Shutdown completed successfully');

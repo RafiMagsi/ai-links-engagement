@@ -23,6 +23,30 @@ export interface AutomationAccount {
   };
 }
 
+// Post Type for AI Links Mobile App
+export interface Post {
+  id: string;
+  text: string;
+  authorUid: string;
+  authorName: string;
+  authorAvatarUrl?: string;
+  authorRole?: string;
+  colorCode?: string;
+  postType: string;
+  hashtags?: string[];
+  media?: Array<{
+    url: string;
+    type: 'image' | 'video';
+  }>;
+  likesCount: number;
+  commentsCount: number;
+  repostsCount: number;
+  savesCount: number;
+  deleted: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // Tone Preset Type
 export enum TonePreset {
   PROFESSIONAL = 'professional',
