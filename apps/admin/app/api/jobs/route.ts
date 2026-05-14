@@ -6,14 +6,24 @@ import { verifyIdToken } from '@ai-links/firebase-admin';
 import { AutomationJob, JobType, JobStatus } from '@ai-links/shared-types';
 import { z } from 'zod';
 
+function serializeDate(value: any) {
+  if (value && typeof value?.toDate === 'function') {
+    return value.toDate().toISOString();
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return value;
+}
+
 function serializeJob(job: any): any {
   return {
     ...job,
-    createdAt: job.createdAt?.toDate?.() instanceof Date ? job.createdAt.toDate().toISOString() : job.createdAt,
-    updatedAt: job.updatedAt?.toDate?.() instanceof Date ? job.updatedAt.toDate().toISOString() : job.updatedAt,
-    startedAt: job.startedAt?.toDate?.() instanceof Date ? job.startedAt.toDate().toISOString() : job.startedAt,
-    completedAt: job.completedAt?.toDate?.() instanceof Date ? job.completedAt.toDate().toISOString() : job.completedAt,
-    nextRetryAt: job.nextRetryAt?.toDate?.() instanceof Date ? job.nextRetryAt.toDate().toISOString() : job.nextRetryAt,
+    createdAt: serializeDate(job.createdAt),
+    updatedAt: serializeDate(job.updatedAt),
+    startedAt: serializeDate(job.startedAt),
+    completedAt: serializeDate(job.completedAt),
+    nextRetryAt: serializeDate(job.nextRetryAt),
   };
 }
 
@@ -35,9 +45,9 @@ type CreateJobInput = z.infer<typeof CreateJobSchema>;
 async function verifyAuth(request: NextRequest): Promise<string | null> {
   const authHeader = request.headers.get('authorization');
 
-  // Always accept requests for development/testing
+  // Allow unauthenticated access only in development/test to keep local setup simple.
   if (!authHeader?.startsWith('Bearer ')) {
-    return 'dev-user';
+    return process.env.NODE_ENV === 'production' ? null : 'dev-user';
   }
 
   const token = authHeader.substring(7);
@@ -45,8 +55,7 @@ async function verifyAuth(request: NextRequest): Promise<string | null> {
     const decoded = await verifyIdToken(token);
     return decoded.uid;
   } catch {
-    // On verification failure, still allow as dev-user
-    return 'dev-user';
+    return process.env.NODE_ENV === 'production' ? null : 'dev-user';
   }
 }
 
@@ -76,46 +85,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Account not found' }, { status: 404 });
     }
 
-    // Return jobs without Firestore index requirement
-    try {
-      // Try simple query without orderBy
-      const snapshot = await db
-        .collection('automationJobs')
-        .where('accountId', '==', accountId)
-        .limit(limit)
-        .get();
-
-      const jobs = snapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        ...serializeJob(doc.data()),
-      }));
-
-      return NextResponse.json({ jobs });
-    } catch (err) {
-      // If Firestore fails, return empty jobs
-      console.log('Firestore query failed, returning empty jobs', err);
-      return NextResponse.json({ jobs: [] });
-    }
-
-    let query = db
+    // Avoid composite index requirements by doing a simple query then filtering/sorting in memory.
+    // This keeps the admin dashboard working even when Firestore indexes aren't configured yet.
+    const fetchLimit = Math.min(Math.max(limit, 1) * 4, 200);
+    const snapshot = await db
       .collection('automationJobs')
-      .where('accountId', '==', accountId);
-
-    if (status) {
-      query = query.where('status', '==', status);
-    }
-
-    const snapshot = await query
-      .orderBy('createdAt', 'desc')
-      .limit(limit)
+      .where('accountId', '==', accountId)
+      .limit(fetchLimit)
       .get();
 
-    const jobs = snapshot.docs.map((doc: any) => ({
+    let jobs = snapshot.docs.map((doc: any) => ({
       id: doc.id,
-      ...doc.data(),
-    }));
+      ...serializeJob(doc.data()),
+    })) as AutomationJob[];
 
-    return NextResponse.json({ jobs });
+    if (status) {
+      jobs = jobs.filter((j) => j.status === status);
+    }
+
+    jobs.sort((a: any, b: any) => {
+      const aTime = a.createdAt ? new Date(a.createdAt as any).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt as any).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    return NextResponse.json({ jobs: jobs.slice(0, limit) });
   } catch (error) {
     console.error('Error fetching jobs:', error);
     return NextResponse.json(
@@ -133,7 +127,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const data = CreateJobSchema.parse(body);
+    const data: CreateJobInput = CreateJobSchema.parse(body);
 
     const db = getFirestore();
 

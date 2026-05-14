@@ -190,6 +190,8 @@ export interface AutomationJob {
     aiModel?: string;
     tokensUsed?: number;
     publishedUrl?: string;
+    postId?: string;
+    hashtagsExtracted?: string[];
     error?: string;
   };
   attempts: number;

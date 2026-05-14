@@ -9,11 +9,13 @@ export class AutomationJobProcessor {
   private pollingInterval = 5000; // Poll every 5 seconds
   private isRunning = false;
   private contentGenerator: any = null;
+  private openAiModel: string | null = null;
 
   private async getContentGenerator(): Promise<any> {
     if (!this.contentGenerator) {
-      const { contentGenerator } = await import('./content-generator.js');
+      const { contentGenerator, OPENAI_MODEL } = await import('./content-generator.js');
       this.contentGenerator = contentGenerator;
+      this.openAiModel = OPENAI_MODEL;
     }
     return this.contentGenerator;
   }
@@ -198,7 +200,7 @@ export class AutomationJobProcessor {
 
     return {
       generatedContent: content.content,
-      aiModel: 'gpt-3.5-turbo',
+      aiModel: this.openAiModel || process.env.OPENAI_MODEL || 'gpt-4o-mini',
       tokensUsed: content.content.length / 4,
       postId,
       hashtagsExtracted: hashtagMatch,
@@ -238,7 +240,7 @@ export class AutomationJobProcessor {
 
     return {
       generatedContent: content.content,
-      aiModel: 'gpt-3.5-turbo',
+      aiModel: this.openAiModel || process.env.OPENAI_MODEL || 'gpt-4o-mini',
       tokensUsed: content.content.length / 4,
     };
   }

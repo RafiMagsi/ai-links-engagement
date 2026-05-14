@@ -8,7 +8,7 @@ import {
   ActionType,
 } from '@ai-links/shared-types';
 import { getLogger } from './logger.js';
-import { contentGenerator } from './content-generator.js';
+import { contentGenerator, OPENAI_MODEL } from './content-generator.js';
 import { quotaEngine } from './quota-engine.js';
 
 class JobProcessor {
@@ -115,7 +115,7 @@ class JobProcessor {
             jobId: job.id,
             generatedContent: result.generatedContent,
             prompt: 'Generated post content',
-            model: 'gpt-3.5-turbo',
+            model: OPENAI_MODEL,
             tokensUsed: result.tokensUsed,
           }
         );
@@ -182,7 +182,7 @@ class JobProcessor {
     return {
       generatedContent: content.content,
       tokensUsed: 150, // Estimate
-      model: 'gpt-3.5-turbo',
+      model: OPENAI_MODEL,
     };
   }
 
@@ -205,7 +205,7 @@ class JobProcessor {
     return {
       generatedContent: content.content,
       tokensUsed: 100, // Estimate
-      model: 'gpt-3.5-turbo',
+      model: OPENAI_MODEL,
     };
   }
 

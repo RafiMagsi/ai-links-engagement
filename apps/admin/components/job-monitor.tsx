@@ -3,6 +3,7 @@
 import { AutomationJob, JobStatus } from '@ai-links/shared-types';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import Link from 'next/link';
 
 interface JobMonitorProps {
   accountId: string;
@@ -136,7 +137,7 @@ export function JobMonitor({ accountId }: JobMonitorProps) {
                 : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
             }`}
           >
-            {status}
+            {status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')}
           </button>
         ))}
       </div>
@@ -144,21 +145,30 @@ export function JobMonitor({ accountId }: JobMonitorProps) {
       {jobs.length === 0 ? (
         <div className="text-center py-8 text-gray-500">No jobs found</div>
       ) : (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="bg-white rounded-lg shadow-md overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-gray-50 border-b sticky top-0">
               <tr>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                   Job ID
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  Type
+                  Job Type
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  Created
+                  Created At
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                  Attempts
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                  Next Retry
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                  Priority
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                   Actions
@@ -168,22 +178,38 @@ export function JobMonitor({ accountId }: JobMonitorProps) {
             <tbody className="divide-y">
               {jobs.map((job) => (
                 <tr key={job.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-mono text-gray-600">
-                    {job.id.substring(0, 12)}...
+                  <td className="px-6 py-4 text-sm">
+                    <Link
+                      href={`/dashboard/jobs/${job.id}`}
+                      className="font-mono text-blue-600 hover:underline cursor-pointer"
+                    >
+                      {job.id.substring(0, 12)}...
+                    </Link>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{job.jobType}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">
+                    {job.jobType.charAt(0).toUpperCase() + job.jobType.slice(1).toLowerCase().replace(/_/g, ' ')}
+                  </td>
                   <td className="px-6 py-4 text-sm">
                     <span
                       className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
                         job.status
                       )}`}
                     >
-                      {job.status}
+                      {job.status.charAt(0).toUpperCase() + job.status.slice(1).replace(/_/g, ' ')}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
                     {new Date(job.createdAt).toLocaleString()}
                   </td>
+                  <td className="px-6 py-4 text-sm text-gray-900">
+                    {job.attempts}/{job.maxAttempts}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {job.nextRetryAt
+                      ? new Date(job.nextRetryAt).toLocaleString()
+                      : '-'}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-900">{job.priority}</td>
                   <td className="px-6 py-4 text-sm">
                     {job.status === JobStatus.FAILED && (
                       <button

@@ -3,6 +3,8 @@ import { AutomationKeywords, TonePreset, ContentIntent } from '@ai-links/shared-
 import { getLogger } from './logger.js';
 import { z } from 'zod';
 
+export const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+
 const GeneratedContentSchema = z.object({
   content: z.string().min(10).max(3000),
   hashtags: z.array(z.string()).optional(),
@@ -76,7 +78,7 @@ Generate ONLY the post content, without any meta information.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: OPENAI_MODEL,
         messages: [
           {
             role: 'user',
@@ -127,7 +129,7 @@ Generate ONLY the comment text, without any meta information.`;
 
     try {
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: OPENAI_MODEL,
         messages: [
           {
             role: 'user',

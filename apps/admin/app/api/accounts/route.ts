@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 // Use require() for firebase-admin to avoid Next.js transpilation that breaks gRPC
 // @ts-ignore - require used intentionally to prevent transpilation
-const { initializeFirebaseAdmin, getFirestore } = require('@ai-links/firebase-admin');
+const { initializeFirebaseAdmin, getFirestore, verifyIdToken } = require('@ai-links/firebase-admin');
 
 const CreateAccountSchema = z.object({
   name: z.string().min(1),
@@ -29,30 +29,24 @@ const CreateAccountSchema = z.object({
 
 type CreateAccountInput = z.infer<typeof CreateAccountSchema>;
 
-// Simple auth check - for development
-async function verifyAuth(request: NextRequest): Promise<string | null> {
+async function verifyAuth(request: NextRequest): Promise<{ uid: string; admin: boolean } | null> {
   const authHeader = request.headers.get('authorization');
 
-  // In development, just check if Bearer token exists
-  if (process.env.NODE_ENV === 'development') {
-    if (authHeader?.startsWith('Bearer ')) {
-      // Accept any token in development
-      return 'dev-user';
-    }
-    return null;
-  }
-
-  // In production, would verify token properly
   if (!authHeader?.startsWith('Bearer ')) {
+    if (process.env.NODE_ENV === 'development') {
+      return { uid: 'dev-user', admin: true };
+    }
     return null;
   }
 
   const token = authHeader.substring(7);
   try {
-    // Production: verify with Firebase Admin SDK
-    // For now, just accept any token with Bearer prefix
-    return 'verified-user';
+    const decoded = await verifyIdToken(token);
+    return { uid: decoded.uid, admin: Boolean(decoded.admin) };
   } catch {
+    if (process.env.NODE_ENV === 'development') {
+      return { uid: 'dev-user', admin: true };
+    }
     return null;
   }
 }
@@ -61,17 +55,17 @@ export async function GET(request: NextRequest) {
   try {
     initializeFirebaseAdmin();
 
-    const userId = await verifyAuth(request);
-    if (!userId) {
+    const auth = await verifyAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {
       const db = getFirestore();
-      const snapshot = await db
-        .collection('automationAccounts')
-        .where('userId', '==', userId)
-        .get();
+      const query = db.collection('automationAccounts');
+      const snapshot = auth.admin
+        ? await query.get()
+        : await query.where('userId', '==', auth.uid).get();
 
       const accounts = snapshot.docs.map((doc: any) => ({
         id: doc.id,
@@ -103,12 +97,12 @@ export async function POST(request: NextRequest) {
     console.log('[1] ✓ Firebase initialized');
 
     console.log('[2] Verifying auth...');
-    const userId = await verifyAuth(request);
-    if (!userId) {
+    const auth = await verifyAuth(request);
+    if (!auth) {
       console.error('[ERROR] Auth failed');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    console.log('[2] ✓ Auth verified, userId:', userId);
+    console.log('[2] ✓ Auth verified, userId:', auth.uid);
 
     console.log('[3] Parsing request body...');
     const body = await request.json();
@@ -120,7 +114,7 @@ export async function POST(request: NextRequest) {
 
     const account: AutomationAccount = {
       id: accountId,
-      userId,
+      userId: auth.uid,
       name: data.name,
       email: data.email,
       bio: data.bio,
