@@ -1,6 +1,7 @@
 import { getFirestore } from '@ai-links/firebase-admin';
 import { AutomationJob, JobType, JobStatus, AutomationKeywords } from '@ai-links/shared-types';
 import { getLogger } from './logger.js';
+import crypto from 'crypto';
 
 const logger = getLogger();
 
@@ -62,23 +63,65 @@ export class AutomationJobProcessor {
       }
 
       for (const doc of snapshot.docs) {
-        const job = doc.data() as AutomationJob;
-        await this.processJob(job);
+        await this.processJob(doc.id);
       }
     } catch (error) {
       logger.error({ error }, 'Failed to fetch pending jobs');
     }
   }
 
-  private async processJob(job: AutomationJob) {
-    try {
-      logger.info({ jobId: job.id, jobType: job.jobType }, 'Processing automation job');
+  private async claimJob(jobId: string): Promise<{ job: AutomationJob; lockId: string } | null> {
+    const jobRef = this.db.collection('automationJobs').doc(jobId);
+    const lockId = crypto.randomUUID();
+    const now = new Date();
 
-      // Update status to PROCESSING
-      await this.db.collection('automationJobs').doc(job.id).update({
-        status: JobStatus.PROCESSING,
-        startedAt: new Date(),
+    try {
+      const claimedJob = await this.db.runTransaction(async (tx) => {
+        const snap = await tx.get(jobRef);
+        if (!snap.exists) return null;
+
+        const data = snap.data() as AutomationJob;
+        const currentStatus = data.status as any;
+        if (currentStatus !== JobStatus.PENDING) return null;
+
+        const nextRetryAt: any = (data as any).nextRetryAt;
+        const nextRetryDate =
+          nextRetryAt && typeof nextRetryAt?.toDate === 'function'
+            ? nextRetryAt.toDate()
+            : nextRetryAt instanceof Date
+              ? nextRetryAt
+              : null;
+        if (nextRetryDate && nextRetryDate.getTime() > now.getTime()) {
+          return null;
+        }
+
+        tx.update(jobRef, {
+          status: JobStatus.PROCESSING,
+          startedAt: now,
+          updatedAt: now,
+          processingLockId: lockId,
+        });
+
+        return { ...data, id: jobId };
       });
+
+      if (!claimedJob) return null;
+      return { job: claimedJob, lockId };
+    } catch (error) {
+      logger.error({ jobId, error }, 'Failed to claim job');
+      return null;
+    }
+  }
+
+  private async processJob(jobId: string) {
+    try {
+      const claimed = await this.claimJob(jobId);
+      if (!claimed) {
+        return;
+      }
+
+      const { job, lockId } = claimed;
+      logger.info({ jobId: job.id, jobType: job.jobType, lockId }, 'Processing automation job');
 
       let result: any;
 
@@ -96,30 +139,33 @@ export class AutomationJobProcessor {
         result,
         completedAt: new Date(),
         updatedAt: new Date(),
+        processingLockId: lockId,
       });
 
       logger.info({ jobId: job.id }, 'Job completed successfully');
     } catch (error) {
-      logger.error({ jobId: job.id, error }, 'Job processing failed');
+      logger.error({ jobId: jobId, error }, 'Job processing failed');
 
-      const attempts = (job.attempts || 0) + 1;
-      const shouldRetry = attempts < (job.maxAttempts || 3);
+      const jobDoc = await this.db.collection('automationJobs').doc(jobId).get();
+      const current = jobDoc.exists ? (jobDoc.data() as AutomationJob) : null;
+      const attempts = ((current?.attempts as any) || 0) + 1;
+      const shouldRetry = attempts < ((current?.maxAttempts as any) || 3);
 
       if (shouldRetry) {
         // Schedule retry
         const nextRetryAt = new Date(Date.now() + Math.pow(2, attempts) * 1000); // Exponential backoff
 
-        await this.db.collection('automationJobs').doc(job.id).update({
+        await this.db.collection('automationJobs').doc(jobId).update({
           status: JobStatus.PENDING,
           attempts,
           nextRetryAt,
           updatedAt: new Date(),
         });
 
-        logger.info({ jobId: job.id, attempts, nextRetryAt }, 'Job scheduled for retry');
+        logger.info({ jobId: jobId, attempts, nextRetryAt }, 'Job scheduled for retry');
       } else {
         // Mark as failed
-        await this.db.collection('automationJobs').doc(job.id).update({
+        await this.db.collection('automationJobs').doc(jobId).update({
           status: JobStatus.FAILED,
           attempts,
           result: {
@@ -129,7 +175,7 @@ export class AutomationJobProcessor {
           updatedAt: new Date(),
         });
 
-        logger.error({ jobId: job.id }, 'Job failed after max attempts');
+        logger.error({ jobId: jobId }, 'Job failed after max attempts');
       }
     }
   }
@@ -164,21 +210,34 @@ export class AutomationJobProcessor {
       };
     }
 
-    const content = await contentGen.generatePost({
-      keyword,
-      keywords,
-    });
+    // Idempotency guard: use job.id as the post document id.
+    const postId = job.id;
+    const postRef = this.db.collection('posts').doc(postId);
+    const existingPost = await postRef.get();
+    if (existingPost.exists) {
+      const existingData: any = existingPost.data();
+      return {
+        generatedContent: existingData?.text || '',
+        aiModel: this.openAiModel || process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        tokensUsed: 0,
+        postId,
+        deduped: true,
+      };
+    }
+
+    const content = await contentGen.generatePost({ keyword, keywords });
 
     // Extract hashtags from content
     const hashtagMatch = content.content.match(/#\w+/g) || [];
 
-    // Create post in Firebase
-    const postId = this.db.collection('posts').doc().id;
+    const normalizedText = content.content.trim().replace(/\s+/g, ' ');
+    const contentHash = crypto.createHash('sha256').update(normalizedText).digest('hex');
     const now = new Date();
 
     const post = {
       id: postId,
-      text: content.content,
+      text: normalizedText,
+      contentHash,
       authorUid: accountId,
       authorName: account?.name || 'AI Links',
       authorAvatarUrl: account?.avatarUrl,
@@ -196,14 +255,40 @@ export class AutomationJobProcessor {
       updatedAt: now,
     };
 
-    await this.db.collection('posts').doc(postId).set(post);
+    // Duplicate-content guard: if exact same contentHash already exists for this author, skip creating another.
+    // (Query is best-effort; even without an index the jobId-based idempotency still prevents double writes.)
+    try {
+      const recentSnap = await this.db
+        .collection('posts')
+        .where('authorUid', '==', accountId)
+        .orderBy('createdAt', 'desc')
+        .limit(25)
+        .get();
+
+      const isDuplicate = recentSnap.docs.some((d) => (d.data() as any)?.contentHash === contentHash);
+      if (isDuplicate) {
+        return {
+          generatedContent: normalizedText,
+          aiModel: this.openAiModel || process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          tokensUsed: normalizedText.length / 4,
+          postId: null,
+          skippedDuplicate: true,
+          contentHash,
+        };
+      }
+    } catch (error) {
+      logger.warn({ jobId: job.id, error }, 'Duplicate-content check failed, proceeding');
+    }
+
+    await postRef.set(post, { merge: false });
 
     return {
-      generatedContent: content.content,
+      generatedContent: normalizedText,
       aiModel: this.openAiModel || process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      tokensUsed: content.content.length / 4,
+      tokensUsed: normalizedText.length / 4,
       postId,
       hashtagsExtracted: hashtagMatch,
+      contentHash,
     };
   }
 

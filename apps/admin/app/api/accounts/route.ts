@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
         details: (dbError as any).details,
       });
       console.warn('[WARNING] Firestore unavailable - account created in memory but not persisted');
-      console.warn('Account data:', { accountId, userId, name: account.name, email: account.email });
+      console.warn('Account data:', { accountId, userId: auth.uid, name: account.name, email: account.email });
       console.warn('FIX: Check that Firestore database exists in Firebase console at https://console.firebase.google.com');
       console.warn('     Path: Your Project → Firestore Database → Create Database (if not exists)');
 
