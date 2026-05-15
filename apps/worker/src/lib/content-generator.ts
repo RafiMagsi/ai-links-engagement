@@ -6,6 +6,11 @@ import type { RecentItem } from './recent-content-sources.js';
 
 export const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
+const POST_MIN_CHARS = parseInt(process.env.POST_MIN_CHARS || '50', 10);
+const POST_MAX_CHARS = parseInt(process.env.POST_MAX_CHARS || '280', 10);
+const COMMENT_MIN_CHARS = parseInt(process.env.COMMENT_MIN_CHARS || '50', 10);
+const COMMENT_MAX_CHARS = parseInt(process.env.COMMENT_MAX_CHARS || '280', 10);
+
 const GeneratedContentSchema = z.object({
   content: z.string().min(10).max(3000),
   hashtags: z.array(z.string()).optional(),
@@ -57,6 +62,32 @@ class ContentGenerator {
     return intents.map((intent) => intentMap[intent]).join(', or ');
   }
 
+  private clampToMaxChars(text: string, maxChars: number): string {
+    const trimmed = text.trim();
+    if (trimmed.length <= maxChars) return trimmed;
+
+    const slice = trimmed.slice(0, maxChars);
+
+    // Prefer ending on a sentence boundary.
+    const sentenceEnd = slice.match(/[\s\S]*[.?!](?=\s|$)/);
+    if (sentenceEnd?.[0] && sentenceEnd[0].length >= Math.floor(maxChars * 0.7)) {
+      return sentenceEnd[0].trim();
+    }
+
+    // Otherwise, end on the last comma or whitespace boundary.
+    const commaIdx = slice.lastIndexOf(',');
+    if (commaIdx > Math.floor(maxChars * 0.6)) {
+      return slice.slice(0, commaIdx + 1).trim();
+    }
+
+    const spaceIdx = slice.lastIndexOf(' ');
+    if (spaceIdx > Math.floor(maxChars * 0.6)) {
+      return slice.slice(0, spaceIdx).trim();
+    }
+
+    return slice.trim();
+  }
+
   async generatePost(context: GenerationContext): Promise<GeneratedContent> {
     const { keyword, keywords } = context;
     const recent = (context.recentItems || []).slice(0, 5);
@@ -93,12 +124,13 @@ Guidelines:
 - Use natural language, not overly promotional
 - Include relevant hashtags if appropriate
 - Use 1-3 emojis for visual appeal
-- Length: 150-500 characters
+- Length: ${POST_MIN_CHARS}-${POST_MAX_CHARS} characters (hard limit: never exceed ${POST_MAX_CHARS})
 - Make it shareable and comment-worthy
 
 Generate ONLY the post content, without any meta information.`;
 
     try {
+      const maxTokens = Math.min(300, Math.max(80, Math.ceil(POST_MAX_CHARS / 4) + 40));
       const response = await this.openai.chat.completions.create({
         model: OPENAI_MODEL,
         messages: [
@@ -108,10 +140,11 @@ Generate ONLY the post content, without any meta information.`;
           },
         ],
         temperature: 0.7,
-        max_tokens: 300,
+        max_tokens: maxTokens,
       });
 
       const content = response.choices[0]?.message?.content || '';
+      const clamped = this.clampToMaxChars(content, POST_MAX_CHARS);
 
       this.logger.info(
         { keyword, tokensUsed: response.usage?.total_tokens },
@@ -119,7 +152,7 @@ Generate ONLY the post content, without any meta information.`;
       );
 
       return {
-        content: content.trim(),
+        content: clamped,
       };
     } catch (error) {
       this.logger.error({ error, keyword }, 'Failed to generate post');
@@ -143,13 +176,14 @@ Intent: The comment should ${this.getIntentDescriptions(keywords.allowedIntents)
 Guidelines:
 - Be genuine and add value to the conversation
 - Ask a follow-up question or provide insight
-- Keep it concise (50-200 characters)
+- Keep it concise (${COMMENT_MIN_CHARS}-${COMMENT_MAX_CHARS} characters) (hard limit: never exceed ${COMMENT_MAX_CHARS})
 - Don't be overly promotional
 - Use 0-2 emojis if it adds value
 
 Generate ONLY the comment text, without any meta information.`;
 
     try {
+      const maxTokens = Math.min(150, Math.max(40, Math.ceil(COMMENT_MAX_CHARS / 4) + 30));
       const response = await this.openai.chat.completions.create({
         model: OPENAI_MODEL,
         messages: [
@@ -159,10 +193,11 @@ Generate ONLY the comment text, without any meta information.`;
           },
         ],
         temperature: 0.7,
-        max_tokens: 150,
+        max_tokens: maxTokens,
       });
 
       const content = response.choices[0]?.message?.content || '';
+      const clamped = this.clampToMaxChars(content, COMMENT_MAX_CHARS);
 
       this.logger.info(
         { keyword, tokensUsed: response.usage?.total_tokens },
@@ -170,7 +205,7 @@ Generate ONLY the comment text, without any meta information.`;
       );
 
       return {
-        content: content.trim(),
+        content: clamped,
       };
     } catch (error) {
       this.logger.error({ error, keyword }, 'Failed to generate comment');
