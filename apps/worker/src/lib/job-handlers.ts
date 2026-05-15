@@ -261,27 +261,25 @@ export async function handleSchedulerJob(jobData: BullJobData): Promise<any> {
       if (jobType === JobType.COMMENT_GENERATION && commentLimit > 0 && commentsCreated >= commentLimit) continue;
       if (jobType === JobType.REACTION_ACTION && reactionLimit > 0 && reactionsAdded >= reactionLimit) continue;
 
-      // Avoid queuing duplicate pending/processing jobs for the same account+type
-      const pendingSnap = await firestore
-        .collection('automationJobs')
-        .where('accountId', '==', accId)
-        .where('status', '==', JobStatus.PENDING)
-        .limit(20)
-        .get();
-      const processingSnap = await firestore
-        .collection('automationJobs')
-        .where('accountId', '==', accId)
-        .where('status', '==', JobStatus.PROCESSING)
-        .limit(20)
-        .get();
+      // Use a stable recurring job per account+type so we get a single job with many executions.
+      const stableJobId = `recurring_${accId}_${jobType}`;
+      const jobRef = firestore.collection('automationJobs').doc(stableJobId);
+      const existingJob = await jobRef.get();
 
-      const alreadyQueued = [...pendingSnap.docs, ...processingSnap.docs].some((d) => {
-        const j = d.data() as any;
-        return j.jobType === jobType;
-      });
-      if (alreadyQueued) continue;
+      // If job exists and is processing, don't touch it.
+      if (existingJob.exists) {
+        const existingData: any = existingJob.data();
+        if (existingData?.status === JobStatus.PROCESSING) continue;
+        const nextRunAt: any = existingData?.nextRunAt;
+        const nextRunDate =
+          nextRunAt && typeof nextRunAt?.toDate === 'function'
+            ? nextRunAt.toDate()
+            : nextRunAt instanceof Date
+              ? nextRunAt
+              : null;
+        if (nextRunDate && nextRunDate.getTime() > Date.now()) continue;
+      }
 
-      const jobRef = firestore.collection('automationJobs').doc();
       // Pick a keyword that keeps content "AI related" without external news ingestion.
       // For truly "recent" topics, we'd need a feed/news source; here we stick to account keywords.
       let keyword: string | undefined;
@@ -302,11 +300,13 @@ export async function handleSchedulerJob(jobData: BullJobData): Promise<any> {
       }
 
       const newJob: AutomationJob = {
-        id: jobRef.id,
+        id: stableJobId,
         accountId: accId,
         jobType,
         status: JobStatus.PENDING,
         priority: 5,
+        recurring: true,
+        intervalMinutes: schedulerType === 'comment' ? 20 : 30,
         payload: {
           keyword,
           manualTrigger: false,
@@ -317,7 +317,7 @@ export async function handleSchedulerJob(jobData: BullJobData): Promise<any> {
         updatedAt: new Date(),
       };
 
-      await jobRef.set(newJob);
+      await jobRef.set(existingJob.exists ? { ...newJob, createdAt: (existingJob.data() as any)?.createdAt || new Date() } : newJob, { merge: true });
       queuedCount += 1;
       queuedForAccounts.push(accId);
     }

@@ -30,6 +30,8 @@ function serializeJob(job: any): any {
 const CreateJobSchema = z.object({
   accountId: z.string(),
   jobType: z.enum([JobType.POST_GENERATION, JobType.COMMENT_GENERATION]),
+  recurring: z.boolean().optional().default(false),
+  intervalMinutes: z.number().min(1).max(1440).optional(),
   payload: z.object({
     keyword: z.string().optional(),
     theme: z.string().optional(),
@@ -145,6 +147,8 @@ export async function POST(request: NextRequest) {
       jobType: data.jobType,
       status: JobStatus.PENDING,
       priority: data.priority,
+      recurring: data.recurring,
+      intervalMinutes: data.recurring ? (data.intervalMinutes || (data.jobType === JobType.COMMENT_GENERATION ? 20 : 30)) : undefined,
       payload: data.payload || {},
       attempts: 0,
       maxAttempts: 3,

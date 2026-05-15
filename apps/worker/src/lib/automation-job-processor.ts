@@ -114,6 +114,17 @@ export class AutomationJobProcessor {
           return null;
         }
 
+        const nextRunAt: any = (data as any).nextRunAt;
+        const nextRunDate =
+          nextRunAt && typeof nextRunAt?.toDate === 'function'
+            ? nextRunAt.toDate()
+            : nextRunAt instanceof Date
+              ? nextRunAt
+              : null;
+        if (nextRunDate && nextRunDate.getTime() > now.getTime()) {
+          return null;
+        }
+
         const executionRef = this.db
           .collection('automationJobExecutions')
           .doc(jobId)
@@ -247,13 +258,28 @@ export class AutomationJobProcessor {
       }
 
       // Mark as completed
-      await this.db.collection('automationJobs').doc(job.id).update({
-        status: JobStatus.COMPLETED,
-        result,
-        completedAt: new Date(),
-        updatedAt: new Date(),
-        processingLockId: lockId,
-      });
+      const completedAt = new Date();
+      if ((job as any).recurring) {
+        const intervalMinutes = Number((job as any).intervalMinutes || 30);
+        const nextRunAt = new Date(Date.now() + intervalMinutes * 60 * 1000);
+        await this.db.collection('automationJobs').doc(job.id).update({
+          status: JobStatus.PENDING,
+          result,
+          completedAt,
+          updatedAt: completedAt,
+          processingLockId: lockId,
+          lastRunAt: completedAt,
+          nextRunAt,
+        });
+      } else {
+        await this.db.collection('automationJobs').doc(job.id).update({
+          status: JobStatus.COMPLETED,
+          result,
+          completedAt,
+          updatedAt: completedAt,
+          processingLockId: lockId,
+        });
+      }
 
       // Update execution record
       try {

@@ -195,6 +195,15 @@ export interface AutomationJob {
   jobType: JobType;
   status: JobStatus;
   priority: number;
+  /**
+   * When true, this job is a recurring "template" that should execute multiple times.
+   * Each run is recorded under automationJobExecutions/{jobId}/executions/*.
+   */
+  recurring?: boolean;
+  /**
+   * Interval (in minutes) used for recurring jobs.
+   */
+  intervalMinutes?: number;
   payload: {
     keyword?: string;
     theme?: string;
@@ -216,6 +225,10 @@ export interface AutomationJob {
   startedAt?: Date;
   completedAt?: Date;
   nextRetryAt?: Date;
+  nextRunAt?: Date;
+  lastRunAt?: Date;
+  executionCount?: number;
+  lastExecutionId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
