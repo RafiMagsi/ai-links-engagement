@@ -83,7 +83,9 @@ export class AutomationJobProcessor {
     }
   }
 
-  private async claimJob(jobId: string): Promise<{ job: AutomationJob; lockId: string } | null> {
+  private async claimJob(
+    jobId: string
+  ): Promise<{ job: AutomationJob; lockId: string; executionId: string } | null> {
     const jobRef = this.db.collection('automationJobs').doc(jobId);
     const lockId = crypto.randomUUID();
     const now = new Date();
@@ -95,7 +97,7 @@ export class AutomationJobProcessor {
     };
 
     try {
-      const claimedJob = await this.db.runTransaction(async (tx) => {
+      const claimed = await this.db.runTransaction(async (tx) => {
         const snap = await tx.get(jobRef);
         if (!snap.exists) return null;
 
@@ -125,11 +127,17 @@ export class AutomationJobProcessor {
           return null;
         }
 
+        const executionId = this.db
+          .collection('automationJobExecutions')
+          .doc(jobId)
+          .collection('executions')
+          .doc().id;
+
         const executionRef = this.db
           .collection('automationJobExecutions')
           .doc(jobId)
           .collection('executions')
-          .doc();
+          .doc(executionId);
 
         tx.update(jobRef, {
           status: JobStatus.PROCESSING,
@@ -137,11 +145,11 @@ export class AutomationJobProcessor {
           updatedAt: now,
           processingLockId: lockId,
           executionCount: FieldValue.increment(1),
-          lastExecutionId: executionRef.id,
+          lastExecutionId: executionId,
         });
 
         tx.set(executionRef, {
-          id: executionRef.id,
+          id: executionId,
           jobId,
           accountId: data.accountId,
           jobType: data.jobType,
@@ -153,11 +161,11 @@ export class AutomationJobProcessor {
           updatedAt: now,
         });
 
-        return { ...data, id: jobId };
+        return { job: { ...data, id: jobId }, executionId };
       });
 
-      if (!claimedJob) return null;
-      return { job: claimedJob, lockId };
+      if (!claimed) return null;
+      return { job: claimed.job, lockId, executionId: claimed.executionId };
     } catch (error) {
       logger.error({ jobId, error }, 'Failed to claim job');
       return null;
@@ -210,19 +218,17 @@ export class AutomationJobProcessor {
         return;
       }
 
-      const { job, lockId } = claimed;
+      const { job, lockId, executionId } = claimed;
       logger.info({ jobId: job.id, jobType: job.jobType, lockId }, 'Processing automation job');
 
       const limitStatus = await this.isDailyLimitExceeded(job);
       if (limitStatus.exceeded) {
-        const execIdSnap = await this.db.collection('automationJobs').doc(job.id).get();
-        const execId = (execIdSnap.data() as any)?.lastExecutionId as string | undefined;
-        if (execId) {
+        if (executionId) {
           await this.db
             .collection('automationJobExecutions')
             .doc(job.id)
             .collection('executions')
-            .doc(execId)
+            .doc(executionId)
             .set(
               {
                 status: JobStatus.SKIPPED_RATE_LIMITED,
@@ -250,9 +256,9 @@ export class AutomationJobProcessor {
       let result: any;
 
       if (job.jobType === JobType.POST_GENERATION) {
-        result = await this.generatePost(job);
+        result = await this.generatePost(job, { executionId });
       } else if (job.jobType === JobType.COMMENT_GENERATION) {
-        result = await this.generateComment(job);
+        result = await this.generateComment(job, { executionId });
       } else {
         throw new Error(`Unknown job type: ${job.jobType}`);
       }
@@ -283,14 +289,12 @@ export class AutomationJobProcessor {
 
       // Update execution record
       try {
-        const execIdSnap = await this.db.collection('automationJobs').doc(job.id).get();
-        const execId = (execIdSnap.data() as any)?.lastExecutionId as string | undefined;
-        if (execId) {
+        if (executionId) {
           await this.db
             .collection('automationJobExecutions')
             .doc(job.id)
             .collection('executions')
-            .doc(execId)
+            .doc(executionId)
             .set(
               {
                 status: JobStatus.COMPLETED,
@@ -387,7 +391,7 @@ export class AutomationJobProcessor {
     }
   }
 
-  private async generatePost(job: AutomationJob): Promise<any> {
+  private async generatePost(job: AutomationJob, opts: { executionId: string }): Promise<any> {
     const { accountId, payload } = job;
     const keyword = payload.keyword || 'AI and technology';
     const contentGen = await this.getContentGenerator();
@@ -417,8 +421,9 @@ export class AutomationJobProcessor {
       };
     }
 
-    // Idempotency guard: use job.id as the post document id.
-    const postId = job.id;
+    // For recurring jobs, each execution must create a new post.
+    // Use executionId for idempotency within an execution (retries won't duplicate).
+    const postId = (job as any).recurring ? `post_${opts.executionId}` : job.id;
     const postRef = this.db.collection('posts').doc(postId);
     const existingPost = await postRef.get();
     if (existingPost.exists) {
@@ -555,7 +560,7 @@ export class AutomationJobProcessor {
     };
   }
 
-  private async generateComment(job: AutomationJob): Promise<any> {
+  private async generateComment(job: AutomationJob, _opts: { executionId: string }): Promise<any> {
     const { accountId, payload } = job;
     const keyword = payload.keyword || 'engagement';
     const contentGen = await this.getContentGenerator();

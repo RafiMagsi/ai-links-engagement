@@ -120,6 +120,9 @@ ${recentBullets}
 ${previousBlock}
 
 Guidelines:
+- The post must be substantially different from the "Recent posts to avoid repeating" list (do NOT reuse the same opening line or any full sentence).
+- Avoid generic filler like "The AI landscape is evolving rapidly" unless you add a concrete, specific angle.
+- Include at least one specific, actionable takeaway or opinion (not just a summary).
 - Keep it authentic and genuine
 - Use natural language, not overly promotional
 - Include relevant hashtags if appropriate

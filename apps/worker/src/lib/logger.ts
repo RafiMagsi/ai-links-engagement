@@ -1,8 +1,8 @@
-import pino from 'pino';
+import { pino, type Logger } from 'pino';
 
-let logger: pino.Logger;
+let logger: Logger;
 
-export function initializeLogger(level: string = 'info'): pino.Logger {
+export function initializeLogger(level: string = 'info'): Logger {
   logger = pino({
     level,
     transport:
@@ -21,7 +21,7 @@ export function initializeLogger(level: string = 'info'): pino.Logger {
   return logger;
 }
 
-export function getLogger(): pino.Logger {
+export function getLogger(): Logger {
   if (!logger) {
     return initializeLogger();
   }
