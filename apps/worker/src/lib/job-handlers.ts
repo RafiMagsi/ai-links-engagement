@@ -52,6 +52,8 @@ export async function handlePostAction(jobData: BullJobData): Promise<any> {
     const usageDoc = `${accountId}_${today}`;
     await firestore.collection('dailyUsage').doc(usageDoc).set(
       {
+        accountId,
+        date: today,
         postsCreated: FieldValue.increment(1),
         totalActions: FieldValue.increment(1),
         updatedAt: new Date(),
@@ -114,6 +116,8 @@ export async function handleCommentAction(jobData: BullJobData): Promise<any> {
     const usageDoc = `${accountId}_${today}`;
     await firestore.collection('dailyUsage').doc(usageDoc).set(
       {
+        accountId,
+        date: today,
         commentsCreated: FieldValue.increment(1),
         totalActions: FieldValue.increment(1),
         updatedAt: new Date(),
@@ -173,6 +177,8 @@ export async function handleReactionAction(jobData: BullJobData): Promise<any> {
     const usageDoc = `${accountId}_${today}`;
     await firestore.collection('dailyUsage').doc(usageDoc).set(
       {
+        accountId,
+        date: today,
         reactionsAdded: FieldValue.increment(1),
         totalActions: FieldValue.increment(1),
         updatedAt: new Date(),

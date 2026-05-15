@@ -5,7 +5,7 @@ import { getFirestore } from '@ai-links/firebase-admin';
 import { verifyIdToken } from '@ai-links/firebase-admin';
 import { DailyUsage } from '@ai-links/shared-types';
 
-async function verifyAuth(request: NextRequest): Promise<string | null> {
+async function verifyAuth(request: NextRequest): Promise<{ uid: string; admin: boolean } | null> {
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return null;
@@ -13,14 +13,13 @@ async function verifyAuth(request: NextRequest): Promise<string | null> {
 
   const token = authHeader.substring(7);
 
-  // In development, accept any Bearer token
   if (process.env.NODE_ENV === 'development') {
-    return 'dev-user';
+    return { uid: 'dev-user', admin: true };
   }
 
   try {
     const decoded = await verifyIdToken(token);
-    return decoded.uid;
+    return { uid: decoded.uid, admin: Boolean((decoded as any).admin) };
   } catch {
     return null;
   }
@@ -31,11 +30,63 @@ function getTodayDate(): string {
   return today.toISOString().split('T')[0];
 }
 
+function toIsoDate(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
+function looksLikeIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function coerceDocDate(docId: string, data: any): string | null {
+  const direct = typeof data?.date === 'string' ? data.date : null;
+  if (direct && looksLikeIsoDate(direct)) return direct;
+
+  // Back-compat: older writers used doc ids like `${accountId}_${YYYY-MM-DD}` without setting `date`.
+  const parts = String(docId || '').split('_');
+  const last = parts[parts.length - 1];
+  if (looksLikeIsoDate(last)) return last;
+
+  // Fallback to updatedAt if present.
+  const updatedAt = data?.updatedAt;
+  try {
+    const asDate: Date | null =
+      updatedAt?.toDate?.() instanceof Date
+        ? updatedAt.toDate()
+        : updatedAt instanceof Date
+          ? updatedAt
+          : null;
+    return asDate ? toIsoDate(asDate) : null;
+  } catch {
+    return null;
+  }
+}
+
+function emptyDailyUsage(date: string): DailyUsage {
+  return {
+    id: date,
+    date,
+    postsCreated: 0,
+    commentsCreated: 0,
+    reactionsAdded: 0,
+    totalActions: 0,
+    quotaPostsRemaining: 0,
+    quotaCommentsRemaining: 0,
+    quotaReactionsRemaining: 0,
+    quotaTotalRemaining: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const userId = await verifyAuth(request);
-    if (!userId) {
+    const auth = await verifyAuth(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!auth.admin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const days = parseInt(request.nextUrl.searchParams.get('days') || '7', 10);
@@ -43,39 +94,132 @@ export async function GET(request: NextRequest) {
     try {
       const db = getFirestore();
 
-      // Get usage for the last N days
-      const usageHistory: DailyUsage[] = [];
       const today = new Date();
+      const start = new Date(today);
+      start.setHours(0, 0, 0, 0);
+      start.setDate(start.getDate() - Math.max(days - 1, 0));
+      const startDateStr = toIsoDate(start);
 
-      for (let i = 0; i < days; i++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
+      // Aggregate per-account usage docs into system-wide daily buckets.
+      const byDate = new Map<string, DailyUsage>();
+      const seenDocIds = new Set<string>();
 
-        const doc = await db.collection('automationDailyUsage').doc(dateStr).get();
-        if (doc.exists) {
-          usageHistory.push(doc.data() as DailyUsage);
+      const applyUsageDocs = (docs: FirebaseFirestore.QueryDocumentSnapshot[]) => {
+        for (const doc of docs) {
+          if (seenDocIds.has(doc.id)) continue;
+          seenDocIds.add(doc.id);
+
+          const data = doc.data() as any;
+          const date = coerceDocDate(doc.id, data);
+          if (!date) continue;
+          if (date < startDateStr) continue;
+
+          const current = byDate.get(date) || emptyDailyUsage(date);
+          current.postsCreated += Number(data.postsCreated || 0);
+          current.commentsCreated += Number(data.commentsCreated || 0);
+          current.reactionsAdded += Number(data.reactionsAdded || 0);
+          current.totalActions += Number(data.totalActions || 0);
+          byDate.set(date, current);
         }
+      };
+
+      // Primary path: docs that include `date`.
+      try {
+        const usageSnap = await db
+          .collection('dailyUsage')
+          .where('date', '>=', startDateStr)
+          .get();
+        applyUsageDocs(usageSnap.docs);
+      } catch {
+        // Ignore; we'll fall back to updatedAt query below.
       }
 
-      // Get today's usage
-      const todayUsageDoc = await db
-        .collection('automationDailyUsage')
-        .doc(getTodayDate())
-        .get();
-
-      let todayUsage: DailyUsage | null = null;
-      if (todayUsageDoc.exists) {
-        todayUsage = todayUsageDoc.data() as DailyUsage;
+      // Back-compat: older docs might be missing `date` but have `updatedAt`.
+      try {
+        const usageSnapByUpdatedAt = await db
+          .collection('dailyUsage')
+          .where('updatedAt', '>=', start)
+          .get();
+        applyUsageDocs(usageSnapByUpdatedAt.docs);
+      } catch {
+        // Ignore; if both fail the history will show zeros.
       }
 
-      return NextResponse.json({ todayUsage, usageHistory });
+      // Ensure we return a row per day even if empty.
+      const usageHistory: DailyUsage[] = [];
+      for (let i = 0; i < days; i++) {
+        const d = new Date(start);
+        d.setDate(d.getDate() + i);
+        const dateStr = toIsoDate(d);
+        usageHistory.push(byDate.get(dateStr) || emptyDailyUsage(dateStr));
+      }
+
+      const todayUsage = byDate.get(getTodayDate()) || emptyDailyUsage(getTodayDate());
+
+      // System breakdown (best-effort; avoids failing the whole endpoint if an index is missing).
+      const breakdown: any = {};
+      const startTs = start;
+      try {
+        const jobsCount = await db
+          .collection('automationJobs')
+          .where('createdAt', '>=', startTs)
+          .count()
+          .get();
+        breakdown.jobsCreated = jobsCount.data().count;
+      } catch {
+        breakdown.jobsCreated = null;
+      }
+
+      try {
+        const postsCount = await db
+          .collection('posts')
+          .where('createdAt', '>=', startTs)
+          .count()
+          .get();
+        breakdown.postsCreated = postsCount.data().count;
+      } catch {
+        breakdown.postsCreated = null;
+      }
+
+      try {
+        const commentsCount = await db
+          .collection('automationComments')
+          .where('createdAt', '>=', startTs)
+          .count()
+          .get();
+        breakdown.commentsCreated = commentsCount.data().count;
+      } catch {
+        breakdown.commentsCreated = null;
+      }
+
+      // Executions + tokens: collectionGroup query
+      try {
+        const execSnap = await db
+          .collectionGroup('executions')
+          .where('startedAt', '>=', startTs)
+          .get();
+        let totalTokens = 0;
+        execSnap.docs.forEach((d: any) => {
+          const ex = d.data() as any;
+          const tokens = Number(ex?.resultSummary?.tokensUsed || 0);
+          totalTokens += tokens;
+        });
+        breakdown.executions = execSnap.size;
+        breakdown.totalTokens = totalTokens;
+        breakdown.avgTokensPerExecution = execSnap.size > 0 ? Math.round(totalTokens / execSnap.size) : 0;
+      } catch {
+        breakdown.executions = null;
+        breakdown.totalTokens = null;
+        breakdown.avgTokensPerExecution = null;
+      }
+
+      return NextResponse.json({ todayUsage, usageHistory, breakdown });
     } catch (dbError) {
       console.error('Database error:', dbError);
-      if (process.env.NODE_ENV === 'development') {
-        return NextResponse.json({ todayUsage: null, usageHistory: [] });
-      }
-      throw dbError;
+      return NextResponse.json(
+        { error: 'Database error while fetching usage' },
+        { status: 500 }
+      );
     }
   } catch (error) {
     console.error('Error fetching usage:', error);
