@@ -1,4 +1,4 @@
-import { Queue, Worker, QueueEvents } from 'bullmq';
+import { Queue, Worker, QueueEvents, JobScheduler } from 'bullmq';
 import { BullJobType, BullJobData, QueueMetrics } from '@ai-links/shared-types';
 import { getRedisConnection } from './redis.js';
 import { getLogger } from './logger.js';
@@ -17,6 +17,7 @@ interface WorkerMap {
 let queues: QueueMap = {};
 let workers: WorkerMap = {};
 let queueEvents: QueueEvents | null = null;
+let schedulers: Record<string, JobScheduler> = {};
 
 // Queue names
 export const QUEUE_NAMES = {
@@ -33,6 +34,13 @@ export async function initializeQueues(): Promise<void> {
     queues.comment = new Queue(QUEUE_NAMES.COMMENT, { connection: redisConnection });
     queues.reaction = new Queue(QUEUE_NAMES.REACTION, { connection: redisConnection });
     queues.scheduler = new Queue(QUEUE_NAMES.SCHEDULER, { connection: redisConnection });
+
+    // BullMQ v5 requires a JobScheduler for repeatable (cron) jobs.
+    // Without it, repeatable jobs can appear "stuck" (no new scheduler runs → no new executions).
+    schedulers[QUEUE_NAMES.POST] = new JobScheduler(QUEUE_NAMES.POST, { connection: redisConnection });
+    schedulers[QUEUE_NAMES.COMMENT] = new JobScheduler(QUEUE_NAMES.COMMENT, { connection: redisConnection });
+    schedulers[QUEUE_NAMES.REACTION] = new JobScheduler(QUEUE_NAMES.REACTION, { connection: redisConnection });
+    schedulers[QUEUE_NAMES.SCHEDULER] = new JobScheduler(QUEUE_NAMES.SCHEDULER, { connection: redisConnection });
 
     logger.info('Queues initialized successfully');
   } catch (error) {
@@ -91,16 +99,18 @@ export async function addRepeatingJob(
   cronPattern: string,
   jobKey: string
 ): Promise<void> {
-  const queue = await getQueue(queueName);
-
   try {
-    await queue.add(jobType, data, {
-      repeat: {
-        pattern: cronPattern,
-      },
-      jobId: jobKey,
-      removeOnComplete: true,
-    });
+    const scheduler = schedulers[queueName] || new JobScheduler(queueName, { connection: redisConnection });
+    schedulers[queueName] = scheduler;
+
+    await scheduler.upsertJobScheduler(
+      jobKey,
+      { pattern: cronPattern },
+      jobType,
+      data,
+      { removeOnComplete: true },
+      { override: true }
+    );
 
     logger.info({ queueName, jobType, cronPattern, jobKey }, 'Repeating job added');
   } catch (error) {
@@ -113,12 +123,11 @@ export async function removeRepeatingJob(
   queueName: string,
   jobKey: string
 ): Promise<void> {
-  const queue = await getQueue(queueName);
-
   try {
-    await queue.removeRepeatable(jobKey, {
-      pattern: '', // Pattern will be removed based on key
-    });
+    const scheduler = schedulers[queueName] || new JobScheduler(queueName, { connection: redisConnection });
+    schedulers[queueName] = scheduler;
+
+    await scheduler.removeJobScheduler(jobKey);
     logger.info({ queueName, jobKey }, 'Repeating job removed');
   } catch (error) {
     logger.error({ error, queueName, jobKey }, 'Failed to remove repeating job');
@@ -248,6 +257,11 @@ export async function closeQueues(): Promise<void> {
       await workers[workerKey].close();
     }
 
+    // Close all schedulers
+    for (const schedulerKey in schedulers) {
+      await schedulers[schedulerKey].close();
+    }
+
     // Close all queues
     for (const queueKey in queues) {
       await queues[queueKey].close();
@@ -255,6 +269,7 @@ export async function closeQueues(): Promise<void> {
 
     workers = {};
     queues = {};
+    schedulers = {};
 
     logger.info('All queues and workers closed');
   } catch (error) {

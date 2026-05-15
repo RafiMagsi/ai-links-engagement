@@ -258,12 +258,21 @@ jobs:
             if redis-cli ping 2>/dev/null | grep -q PONG; then
               echo "✅ Redis is healthy"
             else
-              echo "⚠️  Redis check skipped or failed"
+              echo "❌ Redis is not responding (expected PONG)"
+              echo "Start it on the server (example): sudo systemctl enable --now redis-server"
+              exit 1
             fi
 
-            # Check Worker process
-            if pm2 list | grep -q "worker"; then
-              echo "✅ Worker process is running"
+            # Check Worker process is online
+            if pm2 describe ai-links-worker 2>/dev/null | grep -qi "status.*online"; then
+              echo "✅ Worker process is online"
+            else
+              echo "❌ Worker process is not online"
+              echo "PM2 status:"
+              pm2 status
+              echo "Worker logs (last 50 lines):"
+              pm2 logs ai-links-worker --lines 50 --nostream || true
+              exit 1
             fi
 
             echo ""
