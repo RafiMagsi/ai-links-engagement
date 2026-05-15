@@ -15,8 +15,10 @@ export default function JobDetailsPage() {
   const dialog = useDialog();
 
   const [job, setJob] = useState<AutomationJob | null>(null);
+  const [executions, setExecutions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<'retry' | 'cancel' | 'delete' | null>(null);
 
   useEffect(() => {
     if (!user || !jobId) return;
@@ -25,19 +27,29 @@ export default function JobDetailsPage() {
       try {
         if (!user) return;
         const token = await user.getIdToken();
-        const response = await fetch(`/api/jobs/details/${jobId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const [jobRes, execRes] = await Promise.all([
+          fetch(`/api/jobs/details/${jobId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`/api/jobs/executions/${jobId}?limit=50`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
 
-        if (!response.ok) {
-          const data = await response.json();
+        if (!jobRes.ok) {
+          const data = await jobRes.json();
           throw new Error(data.error || 'Failed to fetch job');
         }
 
-        const data = await response.json();
-        setJob(data.job);
+        const jobData = await jobRes.json();
+        setJob(jobData.job);
+
+        if (execRes.ok) {
+          const execData = await execRes.json();
+          setExecutions(execData.executions || []);
+        } else {
+          setExecutions([]);
+        }
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
@@ -49,10 +61,46 @@ export default function JobDetailsPage() {
     fetchJob();
   }, [user, jobId]);
 
+  const refresh = async () => {
+    if (!user || !jobId) return;
+    setLoading(true);
+    try {
+      const token = await user.getIdToken();
+      const [jobRes, execRes] = await Promise.all([
+        fetch(`/api/jobs/details/${jobId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`/api/jobs/executions/${jobId}?limit=50`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      if (!jobRes.ok) {
+        const data = await jobRes.json();
+        throw new Error(data.error || 'Failed to fetch job');
+      }
+      const jobData = await jobRes.json();
+      setJob(jobData.job);
+
+      if (execRes.ok) {
+        const execData = await execRes.json();
+        setExecutions(execData.executions || []);
+      } else {
+        setExecutions([]);
+      }
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRetry = async () => {
     if (!user || !job) return;
 
     try {
+      setActionLoading('retry');
       const token = await user.getIdToken();
       const response = await fetch(`/api/jobs/${jobId}`, {
         method: 'POST',
@@ -64,13 +112,14 @@ export default function JobDetailsPage() {
       });
 
       if (!response.ok) throw new Error('Failed to retry job');
-      // Refresh job data
-      window.location.reload();
+      await refresh();
     } catch (err) {
       await dialog.alert({
         variant: 'error',
         message: err instanceof Error ? err.message : 'An error occurred',
       });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -78,6 +127,7 @@ export default function JobDetailsPage() {
     if (!user || !job) return;
 
     try {
+      setActionLoading('cancel');
       const token = await user.getIdToken();
       const response = await fetch(`/api/jobs/${jobId}`, {
         method: 'POST',
@@ -95,6 +145,44 @@ export default function JobDetailsPage() {
         variant: 'error',
         message: err instanceof Error ? err.message : 'An error occurred',
       });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!user || !job) return;
+
+    const confirmed = await dialog.confirm({
+      variant: 'warning',
+      title: 'Delete Job?',
+      message: 'This will delete the job (and its execution history). This cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setActionLoading('delete');
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/jobs/${jobId}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'delete' }),
+      });
+      if (!response.ok) throw new Error('Failed to delete job');
+      router.push('/dashboard/jobs');
+    } catch (err) {
+      await dialog.alert({
+        variant: 'error',
+        message: err instanceof Error ? err.message : 'An error occurred',
+      });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -323,6 +411,84 @@ export default function JobDetailsPage() {
                 </div>
               </section>
             )}
+
+            {/* Executions */}
+            <section className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-gray-900">Executions</h2>
+                <p className="text-sm text-gray-600">
+                  Total: {(job as any).executionCount || executions.length || 0}
+                </p>
+              </div>
+
+              {executions.length === 0 ? (
+                <p className="text-sm text-gray-600">No executions recorded yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {executions.map((ex) => (
+                    <div key={ex.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">
+                            #{ex.id}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Started: {ex.startedAt ? new Date(ex.startedAt).toLocaleString() : '-'}
+                            {ex.completedAt && (
+                              <>
+                                {' '}• Completed: {new Date(ex.completedAt).toLocaleString()}
+                              </>
+                            )}
+                          </p>
+                        </div>
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(ex.status)}`}>
+                          {(ex.status || '').toString().replace(/_/g, ' ')}
+                        </span>
+                      </div>
+
+                      {(ex.resultSummary?.aiModel || ex.resultSummary?.tokensUsed) && (
+                        <div className="mt-3 grid grid-cols-3 gap-3 text-xs text-gray-700">
+                          <div>
+                            <span className="text-gray-500">Model</span>
+                            <div className="font-mono">{ex.resultSummary?.aiModel || '-'}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Tokens</span>
+                            <div className="font-mono">{ex.resultSummary?.tokensUsed ?? '-'}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Target Post</span>
+                            <div className="font-mono">{ex.resultSummary?.postId ?? '-'}</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {ex.resultSummary?.commentId && (
+                        <div className="mt-3 text-xs text-gray-700">
+                          <span className="text-gray-500">Comment ID</span>
+                          <div className="font-mono">{ex.resultSummary.commentId}</div>
+                        </div>
+                      )}
+
+                      {ex.error && (
+                        <div className="mt-3 bg-red-50 border border-red-200 rounded p-3">
+                          <p className="text-xs text-red-900">{ex.error}</p>
+                        </div>
+                      )}
+
+                      {ex.generatedContent && (
+                        <div className="mt-3">
+                          <p className="text-xs text-gray-500 mb-1">Generated Text</p>
+                          <div className="bg-gray-50 rounded p-3 text-sm text-gray-900 whitespace-pre-wrap">
+                            {ex.generatedContent}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
 
           {/* Right Column - Status & Actions */}
@@ -365,19 +531,28 @@ export default function JobDetailsPage() {
                 {job.status === 'failed' && (
                   <button
                     onClick={handleRetry}
+                    disabled={actionLoading !== null}
                     className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                   >
-                    Retry Job
+                    {actionLoading === 'retry' ? 'Retrying…' : 'Retry Job'}
                   </button>
                 )}
                 {['pending', 'processing'].includes(job.status) && (
                   <button
                     onClick={handleCancel}
+                    disabled={actionLoading !== null}
                     className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
                   >
-                    Cancel Job
+                    {actionLoading === 'cancel' ? 'Cancelling…' : 'Cancel Job'}
                   </button>
                 )}
+                <button
+                  onClick={handleDelete}
+                  disabled={actionLoading !== null}
+                  className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
+                >
+                  {actionLoading === 'delete' ? 'Deleting…' : 'Delete Job'}
+                </button>
                 {!['pending', 'processing', 'failed'].includes(job.status) && (
                   <div className="text-center py-8 text-gray-500">
                     <p className="text-sm">No Actions Available</p>

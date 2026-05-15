@@ -1,5 +1,13 @@
 import { getFirestore } from '@ai-links/firebase-admin';
-import { AutomationJob, JobType, JobStatus, AutomationKeywords } from '@ai-links/shared-types';
+import {
+  AutomationJob,
+  JobType,
+  JobStatus,
+  AutomationKeywords,
+  CommentStatus,
+  type CommentSettings,
+  type AutomationComment,
+} from '@ai-links/shared-types';
 import { getLogger } from './logger.js';
 import crypto from 'crypto';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -99,11 +107,31 @@ export class AutomationJobProcessor {
           return null;
         }
 
+        const executionRef = this.db
+          .collection('automationJobExecutions')
+          .doc(jobId)
+          .collection('executions')
+          .doc();
+
         tx.update(jobRef, {
           status: JobStatus.PROCESSING,
           startedAt: now,
           updatedAt: now,
           processingLockId: lockId,
+          executionCount: FieldValue.increment(1),
+          lastExecutionId: executionRef.id,
+        });
+
+        tx.set(executionRef, {
+          id: executionRef.id,
+          jobId,
+          accountId: data.accountId,
+          jobType: data.jobType,
+          status: JobStatus.PROCESSING,
+          lockId,
+          startedAt: now,
+          createdAt: now,
+          updatedAt: now,
         });
 
         return { ...data, id: jobId };
@@ -168,6 +196,25 @@ export class AutomationJobProcessor {
 
       const limitStatus = await this.isDailyLimitExceeded(job);
       if (limitStatus.exceeded) {
+        const execIdSnap = await this.db.collection('automationJobs').doc(job.id).get();
+        const execId = (execIdSnap.data() as any)?.lastExecutionId as string | undefined;
+        if (execId) {
+          await this.db
+            .collection('automationJobExecutions')
+            .doc(job.id)
+            .collection('executions')
+            .doc(execId)
+            .set(
+              {
+                status: JobStatus.SKIPPED_RATE_LIMITED,
+                completedAt: new Date(),
+                updatedAt: new Date(),
+                error: limitStatus.reason || 'Daily limit exceeded',
+              },
+              { merge: true }
+            );
+        }
+
         await this.db.collection('automationJobs').doc(job.id).update({
           status: JobStatus.SKIPPED_RATE_LIMITED,
           result: {
@@ -200,6 +247,38 @@ export class AutomationJobProcessor {
         processingLockId: lockId,
       });
 
+      // Update execution record
+      try {
+        const execIdSnap = await this.db.collection('automationJobs').doc(job.id).get();
+        const execId = (execIdSnap.data() as any)?.lastExecutionId as string | undefined;
+        if (execId) {
+          await this.db
+            .collection('automationJobExecutions')
+            .doc(job.id)
+            .collection('executions')
+            .doc(execId)
+            .set(
+              {
+                status: JobStatus.COMPLETED,
+                completedAt: new Date(),
+                updatedAt: new Date(),
+                resultSummary: {
+                  aiModel: result?.aiModel,
+                  tokensUsed: result?.tokensUsed,
+                  postId: result?.postId,
+                  commentId: result?.commentId,
+                  contentHash: result?.contentHash,
+                  skippedDuplicate: result?.skippedDuplicate,
+                },
+                generatedContent: result?.generatedContent,
+              },
+              { merge: true }
+            );
+        }
+      } catch (error) {
+        logger.warn({ jobId: job.id, error }, 'Failed to update job execution record');
+      }
+
       logger.info({ jobId: job.id }, 'Job completed successfully');
     } catch (error) {
       logger.error({ jobId: jobId, error }, 'Job processing failed');
@@ -208,6 +287,7 @@ export class AutomationJobProcessor {
       const current = jobDoc.exists ? (jobDoc.data() as AutomationJob) : null;
       const attempts = ((current?.attempts as any) || 0) + 1;
       const shouldRetry = attempts < ((current?.maxAttempts as any) || 3);
+      const lastExecutionId = (current as any)?.lastExecutionId as string | undefined;
 
       if (shouldRetry) {
         // Schedule retry
@@ -219,6 +299,24 @@ export class AutomationJobProcessor {
           nextRetryAt,
           updatedAt: new Date(),
         });
+
+        if (lastExecutionId) {
+          await this.db
+            .collection('automationJobExecutions')
+            .doc(jobId)
+            .collection('executions')
+            .doc(lastExecutionId)
+            .set(
+              {
+                status: JobStatus.FAILED,
+                completedAt: new Date(),
+                updatedAt: new Date(),
+                error: error instanceof Error ? error.message : String(error),
+                retryScheduledAt: nextRetryAt,
+              },
+              { merge: true }
+            );
+        }
 
         logger.info({ jobId: jobId, attempts, nextRetryAt }, 'Job scheduled for retry');
       } else {
@@ -232,6 +330,23 @@ export class AutomationJobProcessor {
           completedAt: new Date(),
           updatedAt: new Date(),
         });
+
+        if (lastExecutionId) {
+          await this.db
+            .collection('automationJobExecutions')
+            .doc(jobId)
+            .collection('executions')
+            .doc(lastExecutionId)
+            .set(
+              {
+                status: JobStatus.FAILED,
+                completedAt: new Date(),
+                updatedAt: new Date(),
+                error: error instanceof Error ? error.message : String(error),
+              },
+              { merge: true }
+            );
+        }
 
         logger.error({ jobId: jobId }, 'Job failed after max attempts');
       }
@@ -409,7 +524,6 @@ export class AutomationJobProcessor {
   private async generateComment(job: AutomationJob): Promise<any> {
     const { accountId, payload } = job;
     const keyword = payload.keyword || 'engagement';
-    const postContent = payload.contentId || 'a LinkedIn post';
     const contentGen = await this.getContentGenerator();
 
     // Fetch account keywords and tone settings
@@ -432,15 +546,138 @@ export class AutomationJobProcessor {
       };
     }
 
-    const content = await contentGen.generateComment(postContent, {
+    // Pick a random recent post as the target if none specified
+    let targetPostId: string | undefined = payload.contentId;
+    let targetPostText: string | undefined;
+    try {
+      if (targetPostId) {
+        const postSnap = await this.db.collection('posts').doc(targetPostId).get();
+        if (postSnap.exists) {
+          const postData: any = postSnap.data();
+          targetPostText = postData?.text || postData?.content || '';
+        } else {
+          targetPostId = undefined;
+        }
+      }
+
+      if (!targetPostId) {
+        const postsSnap = await this.db.collection('posts').orderBy('createdAt', 'desc').limit(50).get();
+        const candidates = postsSnap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as any) }))
+          .filter((p: any) => !p.deleted && (p.text || p.content))
+          .slice(0, 30);
+        if (candidates.length > 0) {
+          const pick = candidates[Math.floor(Math.random() * candidates.length)];
+          targetPostId = pick.id;
+          targetPostText = pick.text || pick.content || '';
+        }
+      }
+    } catch (error) {
+      logger.warn({ jobId: job.id, error }, 'Failed to select target post for comment');
+    }
+
+    if (!targetPostId || !targetPostText) {
+      throw new Error('No eligible post found to comment on');
+    }
+
+    // Prevent duplicate comments from same account on same post
+    const existing = await this.db
+      .collection('automationComments')
+      .where('accountId', '==', accountId)
+      .where('postId', '==', targetPostId)
+      .limit(1)
+      .get();
+    if (!existing.empty) {
+      return {
+        generatedContent: '',
+        aiModel: this.openAiModel || process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        tokensUsed: 0,
+        postId: targetPostId,
+        skippedDuplicate: true,
+        commentId: existing.docs[0].id,
+      };
+    }
+
+    // Load comment settings if available
+    let settings: CommentSettings | null = null;
+    try {
+      const settingsSnap = await this.db
+        .collection('automationCommentSettings')
+        .doc(accountId)
+        .get();
+      if (settingsSnap.exists) {
+        settings = settingsSnap.data() as CommentSettings;
+      }
+    } catch (error) {
+      logger.warn({ jobId: job.id, error }, 'Failed to load comment settings; using defaults');
+    }
+
+    const content = await contentGen.generateComment(targetPostText, {
       keyword,
       keywords,
     });
 
+    const text = (content.content || '').trim().replace(/\s+/g, ' ');
+    const minLen = settings?.minCommentLength ?? 50;
+    const maxLen = settings?.maxCommentLength ?? 280;
+    if (text.length < minLen) {
+      throw new Error(`Generated comment too short (${text.length}, min ${minLen})`);
+    }
+    if (text.length > maxLen) {
+      // Should be clamped already, but keep it safe
+      throw new Error(`Generated comment too long (${text.length}, max ${maxLen})`);
+    }
+
+    // Create automation comment record
+    const commentRef = this.db.collection('automationComments').doc();
+    const status =
+      settings?.requireApproval === true ? CommentStatus.PENDING : CommentStatus.APPROVED;
+
+    const commentData: AutomationComment = {
+      id: commentRef.id,
+      accountId,
+      postId: targetPostId,
+      content: text,
+      status,
+      generatedBy: 'ai',
+      generatedAt: new Date(),
+      actorType: 'auto_generated',
+      isOfficialAction: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await commentRef.set(commentData);
+
+    // Update post comment count
+    await this.db
+      .collection('posts')
+      .doc(targetPostId)
+      .set({ commentsCount: FieldValue.increment(1), updatedAt: new Date() }, { merge: true });
+
+    // Update per-account daily usage counters
+    const today = new Date().toISOString().split('T')[0];
+    const usageDocId = `${accountId}_${today}`;
+    await this.db
+      .collection('dailyUsage')
+      .doc(usageDocId)
+      .set(
+        {
+          accountId,
+          date: today,
+          commentsCreated: FieldValue.increment(1),
+          totalActions: FieldValue.increment(1),
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+
     return {
-      generatedContent: content.content,
+      generatedContent: text,
       aiModel: this.openAiModel || process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      tokensUsed: content.content.length / 4,
+      tokensUsed: text.length / 4,
+      postId: targetPostId,
+      commentId: commentRef.id,
     };
   }
 }

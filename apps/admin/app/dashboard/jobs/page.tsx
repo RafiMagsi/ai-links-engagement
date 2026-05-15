@@ -22,6 +22,7 @@ export default function JobsPage() {
   const [keyword, setKeyword] = useState('');
   const [creatingJob, setCreatingJob] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     if (!user) return;
@@ -84,11 +85,8 @@ export default function JobsPage() {
       }
 
       setKeyword('');
-      await dialog.alert({
-        variant: 'success',
-        message: 'Job created successfully!',
-      });
-      window.location.reload();
+      void dialog.alert({ variant: 'success', message: 'Job created successfully!' });
+      setRefreshToken((t) => t + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -227,7 +225,7 @@ export default function JobsPage() {
             {selectedAccount && (
               <div className="bg-white rounded-lg shadow-md p-8">
                 <h3 className="text-xl font-bold text-gray-900 mb-6">Job Queue</h3>
-                <JobMonitor accountId={selectedAccount} />
+                <JobMonitor accountId={selectedAccount} refreshToken={refreshToken} />
               </div>
             )}
           </div>

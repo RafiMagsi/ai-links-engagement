@@ -42,9 +42,9 @@ export async function POST(
     const body = await request.json();
     const { action } = body;
 
-    if (!['retry', 'cancel'].includes(action)) {
+    if (!['retry', 'cancel', 'delete'].includes(action)) {
       return NextResponse.json(
-        { error: 'Invalid action. Must be "retry" or "cancel".' },
+        { error: 'Invalid action. Must be "retry", "cancel", or "delete".' },
         { status: 400 }
       );
     }
@@ -89,6 +89,34 @@ export async function POST(
       });
 
       return NextResponse.json({ job: { ...job, status: JobStatus.CANCELLED } });
+    }
+
+    if (action === 'delete') {
+      // Delete job record + best-effort related artifacts (post doc uses jobId)
+      const postRef = db.collection('posts').doc(jobId);
+      const execColl = db
+        .collection('automationJobExecutions')
+        .doc(jobId)
+        .collection('executions');
+
+      try {
+        const snap = await execColl.limit(200).get();
+        const batch = db.batch();
+        snap.docs.forEach((d: any) => batch.delete(d.ref));
+        // NOTE: Firestore doesn't delete subcollections automatically; this deletes the parent doc
+        // for the executions container (if it exists).
+        if (execColl.parent) {
+          batch.delete(execColl.parent);
+        }
+        batch.delete(postRef);
+        batch.delete(jobDoc.ref);
+        await batch.commit();
+      } catch (error) {
+        // Fallback: at least delete the job doc
+        await jobDoc.ref.delete();
+      }
+
+      return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

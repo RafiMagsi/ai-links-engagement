@@ -1,61 +1,71 @@
 'use client';
 
 import { AutomationJob, JobStatus } from '@ai-links/shared-types';
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { useDialog } from '@/lib/dialog-context';
 
 interface JobMonitorProps {
   accountId: string;
+  refreshToken?: number;
 }
 
-export function JobMonitor({ accountId }: JobMonitorProps) {
+type JobAction = 'retry' | 'cancel' | 'delete';
+
+export function JobMonitor({ accountId, refreshToken }: JobMonitorProps) {
   const [jobs, setJobs] = useState<AutomationJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('');
+  const [actionLoading, setActionLoading] = useState<Record<string, JobAction | undefined>>({});
   const { user } = useAuth();
   const dialog = useDialog();
 
-  useEffect(() => {
+  const fetchJobs = useCallback(async () => {
     if (!user || !accountId) return;
 
-    const fetchJobs = async () => {
-      try {
-        const token = await user.getIdToken();
-        const url = new URL('/api/jobs', window.location.origin);
-        url.searchParams.append('accountId', accountId);
-        if (filter) url.searchParams.append('status', filter);
+    try {
+      const token = await user.getIdToken();
+      const url = new URL('/api/jobs', window.location.origin);
+      url.searchParams.append('accountId', accountId);
+      if (filter) url.searchParams.append('status', filter);
 
-        const response = await fetch(url.toString(), {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-        if (!response.ok) throw new Error('Failed to fetch jobs');
-        const data = await response.json();
-        setJobs(data.jobs);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
+      if (!response.ok) throw new Error('Failed to fetch jobs');
+      const data = await response.json();
+      setJobs(data.jobs);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  }, [user, accountId, filter]);
 
-    fetchJobs();
+  useEffect(() => {
+    if (!user || !accountId) return;
+    setLoading(true);
+    void fetchJobs();
 
-    // Poll every 5 seconds
     const interval = setInterval(fetchJobs, 5000);
     return () => clearInterval(interval);
-  }, [user, accountId, filter]);
+  }, [user, accountId, filter, refreshToken, fetchJobs]);
+
+  const setJobActionLoading = useCallback((jobId: string, action?: JobAction) => {
+    setActionLoading((prev) => ({ ...prev, [jobId]: action }));
+  }, []);
 
   const handleRetry = async (jobId: string) => {
     if (!user) return;
 
     try {
+      setJobActionLoading(jobId, 'retry');
       const token = await user.getIdToken();
       const response = await fetch(`/api/jobs/${jobId}`, {
         method: 'POST',
@@ -67,13 +77,14 @@ export function JobMonitor({ accountId }: JobMonitorProps) {
       });
 
       if (!response.ok) throw new Error('Failed to retry job');
-      // Refresh jobs list
-      window.location.reload();
+      await fetchJobs();
     } catch (err) {
       await dialog.alert({
         variant: 'error',
         message: err instanceof Error ? err.message : 'An error occurred',
       });
+    } finally {
+      setJobActionLoading(jobId, undefined);
     }
   };
 
@@ -81,6 +92,7 @@ export function JobMonitor({ accountId }: JobMonitorProps) {
     if (!user) return;
 
     try {
+      setJobActionLoading(jobId, 'cancel');
       const token = await user.getIdToken();
       const response = await fetch(`/api/jobs/${jobId}`, {
         method: 'POST',
@@ -92,13 +104,55 @@ export function JobMonitor({ accountId }: JobMonitorProps) {
       });
 
       if (!response.ok) throw new Error('Failed to cancel job');
-      // Refresh jobs list
-      window.location.reload();
+      await fetchJobs();
     } catch (err) {
       await dialog.alert({
         variant: 'error',
         message: err instanceof Error ? err.message : 'An error occurred',
       });
+    } finally {
+      setJobActionLoading(jobId, undefined);
+    }
+  };
+
+  const handleDelete = async (jobId: string) => {
+    if (!user) return;
+
+    const confirmed = await dialog.confirm({
+      variant: 'warning',
+      title: 'Delete Job?',
+      message: 'This will delete the job (and its execution history). This cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setJobActionLoading(jobId, 'delete');
+      // Optimistic UI: remove row immediately
+      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/jobs/${jobId}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'delete' }),
+      });
+
+      if (!response.ok) throw new Error('Failed to delete job');
+      await fetchJobs();
+    } catch (err) {
+      await dialog.alert({
+        variant: 'error',
+        message: err instanceof Error ? err.message : 'An error occurred',
+      });
+      // Re-sync list if delete failed
+      await fetchJobs();
+    } finally {
+      setJobActionLoading(jobId, undefined);
     }
   };
 
@@ -113,6 +167,8 @@ export function JobMonitor({ accountId }: JobMonitorProps) {
     };
     return colors[status];
   };
+
+  const filteredStatuses = Object.values(JobStatus);
 
   if (loading) {
     return <div className="text-center py-8">Loading jobs...</div>;
@@ -135,7 +191,7 @@ export function JobMonitor({ accountId }: JobMonitorProps) {
         >
           All
         </button>
-        {Object.values(JobStatus).map((status) => (
+        {filteredStatuses.map((status) => (
           <button
             key={status}
             onClick={() => setFilter(status)}
@@ -222,19 +278,28 @@ export function JobMonitor({ accountId }: JobMonitorProps) {
                     {job.status === JobStatus.FAILED && (
                       <button
                         onClick={() => handleRetry(job.id)}
-                        className="text-blue-600 hover:underline mr-3"
+                        disabled={Boolean(actionLoading[job.id])}
+                        className="text-blue-600 hover:underline mr-3 disabled:opacity-50"
                       >
-                        Retry
+                        {actionLoading[job.id] === 'retry' ? 'Retrying…' : 'Retry'}
                       </button>
                     )}
                     {[JobStatus.PENDING, JobStatus.PROCESSING].includes(job.status) && (
                       <button
                         onClick={() => handleCancel(job.id)}
-                        className="text-red-600 hover:underline"
+                        disabled={Boolean(actionLoading[job.id])}
+                        className="text-red-600 hover:underline disabled:opacity-50"
                       >
-                        Cancel
+                        {actionLoading[job.id] === 'cancel' ? 'Cancelling…' : 'Cancel'}
                       </button>
                     )}
+                    <button
+                      onClick={() => handleDelete(job.id)}
+                      disabled={Boolean(actionLoading[job.id])}
+                      className="text-gray-600 hover:underline ml-3 disabled:opacity-50"
+                    >
+                      {actionLoading[job.id] === 'delete' ? 'Deleting…' : 'Delete'}
+                    </button>
                   </td>
                 </tr>
               ))}
