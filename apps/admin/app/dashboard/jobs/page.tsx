@@ -10,9 +10,11 @@ import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { AutomationAccount, JobType } from '@ai-links/shared-types';
 import { JobMonitor } from '@/components/job-monitor';
+import { useDialog } from '@/lib/dialog-context';
 
 export default function JobsPage() {
   const { user } = useAuth();
+  const dialog = useDialog();
   const [accounts, setAccounts] = useState<AutomationAccount[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -82,7 +84,10 @@ export default function JobsPage() {
       }
 
       setKeyword('');
-      alert('Job created successfully!');
+      await dialog.alert({
+        variant: 'success',
+        message: 'Job created successfully!',
+      });
       window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

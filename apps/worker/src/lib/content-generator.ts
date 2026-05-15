@@ -2,6 +2,7 @@ import { OpenAI } from 'openai';
 import { AutomationKeywords, TonePreset, ContentIntent } from '@ai-links/shared-types';
 import { getLogger } from './logger.js';
 import { z } from 'zod';
+import type { RecentItem } from './recent-content-sources.js';
 
 export const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
@@ -17,6 +18,7 @@ interface GenerationContext {
   keyword: string;
   keywords: AutomationKeywords;
   previousContent?: string[];
+  recentItems?: RecentItem[];
 }
 
 class ContentGenerator {
@@ -57,6 +59,24 @@ class ContentGenerator {
 
   async generatePost(context: GenerationContext): Promise<GeneratedContent> {
     const { keyword, keywords } = context;
+    const recent = (context.recentItems || []).slice(0, 5);
+    const recentBullets =
+      recent.length > 0
+        ? `\nRecent items to reference (pick ONE angle, don't copy headlines verbatim):\n${recent
+            .map((i) => `- ${i.title} (${i.source})`)
+            .join('\n')}\n`
+        : '';
+
+    const previous = (context.previousContent || [])
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    const previousBlock =
+      previous.length > 0
+        ? `\nRecent posts to avoid repeating (don't reuse the same hook or structure):\n${previous
+            .map((t) => `- ${t.substring(0, 120)}`)
+            .join('\n')}\n`
+        : '';
 
     const prompt = `You are a LinkedIn content expert. Generate an engaging LinkedIn post about "${keyword}".
 
@@ -65,6 +85,8 @@ Intent: The post should ${this.getIntentDescriptions(keywords.allowedIntents)}
 Related topics: ${keywords.primaryKeywords.join(', ')}
 
 Avoid these topics: ${keywords.blockedKeywords.join(', ')}
+${recentBullets}
+${previousBlock}
 
 Guidelines:
 - Keep it authentic and genuine

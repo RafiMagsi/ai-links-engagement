@@ -2,6 +2,10 @@ import { getFirestore } from '@ai-links/firebase-admin';
 import { AutomationJob, JobType, JobStatus, AutomationKeywords } from '@ai-links/shared-types';
 import { getLogger } from './logger.js';
 import crypto from 'crypto';
+import { FieldValue } from 'firebase-admin/firestore';
+import { getRecentItemsForAccount } from './recent-content-sources.js';
+import type { RecentItem } from './recent-content-sources.js';
+import { loadContentMemory, appendContentMemory } from './content-memory.js';
 
 const logger = getLogger();
 
@@ -113,6 +117,45 @@ export class AutomationJobProcessor {
     }
   }
 
+  private async isDailyLimitExceeded(
+    job: AutomationJob
+  ): Promise<{ exceeded: boolean; reason?: string }> {
+    if (job.payload?.manualTrigger && process.env.ALLOW_MANUAL_LIMIT_BYPASS === 'true') {
+      return { exceeded: false };
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const usageDocId = `${job.accountId}_${today}`;
+
+    const accountSnap = await this.db.collection('automationAccounts').doc(job.accountId).get();
+    const account: any = accountSnap.exists ? accountSnap.data() : null;
+    if (!account) return { exceeded: false };
+
+    const usageSnap = await this.db.collection('dailyUsage').doc(usageDocId).get();
+    const usage: any = usageSnap.exists ? usageSnap.data() : {};
+
+    const postsCreated = Number(usage.postsCreated || 0);
+    const commentsCreated = Number(usage.commentsCreated || 0);
+    const reactionsAdded = Number(usage.reactionsAdded || 0);
+
+    if (job.jobType === JobType.POST_GENERATION) {
+      const limit = Number(account.dailyPostLimit || 0);
+      if (limit > 0 && postsCreated >= limit) return { exceeded: true, reason: 'Daily post limit reached' };
+    }
+
+    if (job.jobType === JobType.COMMENT_GENERATION) {
+      const limit = Number(account.dailyCommentLimit || 0);
+      if (limit > 0 && commentsCreated >= limit) return { exceeded: true, reason: 'Daily comment limit reached' };
+    }
+
+    if (job.jobType === JobType.REACTION_ACTION) {
+      const limit = Number(account.dailyReactionLimit || 0);
+      if (limit > 0 && reactionsAdded >= limit) return { exceeded: true, reason: 'Daily reaction limit reached' };
+    }
+
+    return { exceeded: false };
+  }
+
   private async processJob(jobId: string) {
     try {
       const claimed = await this.claimJob(jobId);
@@ -122,6 +165,21 @@ export class AutomationJobProcessor {
 
       const { job, lockId } = claimed;
       logger.info({ jobId: job.id, jobType: job.jobType, lockId }, 'Processing automation job');
+
+      const limitStatus = await this.isDailyLimitExceeded(job);
+      if (limitStatus.exceeded) {
+        await this.db.collection('automationJobs').doc(job.id).update({
+          status: JobStatus.SKIPPED_RATE_LIMITED,
+          result: {
+            error: limitStatus.reason || 'Daily limit exceeded',
+          },
+          completedAt: new Date(),
+          updatedAt: new Date(),
+          processingLockId: lockId,
+        });
+        logger.info({ jobId: job.id, reason: limitStatus.reason }, 'Job skipped due to daily limits');
+        return;
+      }
 
       let result: any;
 
@@ -225,7 +283,39 @@ export class AutomationJobProcessor {
       };
     }
 
-    const content = await contentGen.generatePost({ keyword, keywords });
+    const memoryDays = parseInt(process.env.CONTENT_MEMORY_DAYS || '7', 10);
+    const memory = await loadContentMemory({ accountId, days: memoryDays });
+    const usedHeadlineUrls = new Set(memory.recentHeadlineUrls.map((x) => x.url));
+
+    // Fetch a few recent posts to avoid repeating the same hook/structure.
+    let previousContent: string[] = [];
+    try {
+      const prevSnap = await this.db
+        .collection('posts')
+        .where('authorUid', '==', accountId)
+        .orderBy('createdAt', 'desc')
+        .limit(parseInt(process.env.PREVIOUS_POSTS_MAX || '5', 10))
+        .get();
+      previousContent = prevSnap.docs
+        .map((d) => (d.data() as any)?.text)
+        .filter(Boolean);
+    } catch (error) {
+      logger.warn({ jobId: job.id, error }, 'Failed to load previous posts; continuing');
+    }
+
+    let recentItems: RecentItem[] = [];
+    try {
+      recentItems = await getRecentItemsForAccount({
+        category: account?.category,
+        keyword,
+        maxItems: parseInt(process.env.RECENT_ITEMS_MAX || '5', 10),
+      });
+      recentItems = recentItems.filter((i) => !usedHeadlineUrls.has(i.url));
+    } catch (error) {
+      logger.warn({ jobId: job.id, error }, 'Failed to load recent items; generating without news context');
+    }
+
+    const content = await contentGen.generatePost({ keyword, keywords, recentItems, previousContent });
 
     // Extract hashtags from content
     const hashtagMatch = content.content.match(/#\w+/g) || [];
@@ -281,6 +371,30 @@ export class AutomationJobProcessor {
     }
 
     await postRef.set(post, { merge: false });
+
+    // Update per-account daily usage counters
+    const today = new Date().toISOString().split('T')[0];
+    const usageDocId = `${accountId}_${today}`;
+    await this.db
+      .collection('dailyUsage')
+      .doc(usageDocId)
+      .set(
+        {
+          accountId,
+          date: today,
+          postsCreated: FieldValue.increment(1),
+          totalActions: FieldValue.increment(1),
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+
+    // Update per-account "recent content" memory for de-duplication
+    await appendContentMemory({
+      accountId,
+      contentHash,
+      headlineUrls: recentItems.map((i) => i.url),
+    });
 
     return {
       generatedContent: normalizedText,

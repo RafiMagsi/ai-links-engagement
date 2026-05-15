@@ -25,6 +25,7 @@ export default function AccountsPage() {
     location: '',
     role: '',
     skills: '',
+    category: 'ai',
     dailyPostLimit: 30,
     dailyCommentLimit: 50,
     dailyReactionLimit: 20,
@@ -50,6 +51,7 @@ export default function AccountsPage() {
         location: '',
         role: '',
         skills: '',
+        category: 'ai',
         dailyPostLimit: 30,
         dailyCommentLimit: 50,
         dailyReactionLimit: 20,
@@ -222,6 +224,29 @@ export default function AccountsPage() {
                     placeholder="e.g. React, Node.js, Python"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Category
+                  </label>
+                  <select
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="ai">AI</option>
+                    <option value="software">Software</option>
+                    <option value="startups">Startups</option>
+                    <option value="product">Product</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="sales">Sales</option>
+                    <option value="finance">Finance</option>
+                    <option value="health">Health</option>
+                    <option value="general">General</option>
+                  </select>
                 </div>
               </div>
 

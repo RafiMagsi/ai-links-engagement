@@ -4,6 +4,7 @@ import { AutomationJob, JobStatus } from '@ai-links/shared-types';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
+import { useDialog } from '@/lib/dialog-context';
 
 interface JobMonitorProps {
   accountId: string;
@@ -15,6 +16,7 @@ export function JobMonitor({ accountId }: JobMonitorProps) {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('');
   const { user } = useAuth();
+  const dialog = useDialog();
 
   useEffect(() => {
     if (!user || !accountId) return;
@@ -68,7 +70,10 @@ export function JobMonitor({ accountId }: JobMonitorProps) {
       // Refresh jobs list
       window.location.reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'An error occurred');
+      await dialog.alert({
+        variant: 'error',
+        message: err instanceof Error ? err.message : 'An error occurred',
+      });
     }
   };
 
@@ -90,7 +95,10 @@ export function JobMonitor({ accountId }: JobMonitorProps) {
       // Refresh jobs list
       window.location.reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'An error occurred');
+      await dialog.alert({
+        variant: 'error',
+        message: err instanceof Error ? err.message : 'An error occurred',
+      });
     }
   };
 

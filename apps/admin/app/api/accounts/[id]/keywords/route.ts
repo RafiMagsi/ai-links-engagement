@@ -3,13 +3,67 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { UpdateKeywordsSchema } from '@ai-links/shared-types';
 
-const { getFirestore } = require('@ai-links/firebase-admin');
+const { getFirestore, verifyIdToken } = require('@ai-links/firebase-admin');
+
+async function verifyAuth(request: NextRequest): Promise<string | null> {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return process.env.NODE_ENV === 'production' ? null : 'dev-user';
+  }
+  try {
+    const decoded = await verifyIdToken(authHeader.substring(7));
+    return decoded.uid;
+  } catch {
+    return process.env.NODE_ENV === 'production' ? null : 'dev-user';
+  }
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const userId = await verifyAuth(request);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const accountId = params.id;
+    const db = getFirestore();
+
+    const directDoc = await db.collection('automationKeywords').doc(accountId).get();
+    if (directDoc.exists) {
+      return NextResponse.json({ keywords: { id: directDoc.id, ...directDoc.data() } });
+    }
+
+    // Backward-compatibility: older versions stored keywords under a random doc id with an accountId field.
+    const legacySnap = await db
+      .collection('automationKeywords')
+      .where('accountId', '==', accountId)
+      .limit(1)
+      .get();
+    if (!legacySnap.empty) {
+      const legacy = legacySnap.docs[0]!;
+      return NextResponse.json({ keywords: { id: legacy.id, ...legacy.data() }, legacy: true });
+    }
+
+    return NextResponse.json({ keywords: null });
+  } catch (error) {
+    console.error('Error fetching keywords:', error);
+    return NextResponse.json({ error: 'Failed to fetch keywords' }, { status: 500 });
+  }
+}
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const userId = await verifyAuth(request);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const accountId = params.id;
     const body = await request.json();
 
@@ -24,13 +78,11 @@ export async function POST(
     const db = getFirestore();
     const data = validation.data;
 
-    const keywordsRef = db.collection('automationKeywords');
-    const existing = await keywordsRef
-      .where('accountId', '==', accountId)
-      .limit(1)
-      .get();
+    const keywordsRef = db.collection('automationKeywords').doc(accountId);
+    const existingDoc = await keywordsRef.get();
 
     const keywordsData = {
+      id: accountId,
       accountId,
       primaryKeywords: data.primaryKeywords,
       secondaryKeywords: data.secondaryKeywords,
@@ -38,14 +90,10 @@ export async function POST(
       tonePreset: data.tonePreset,
       allowedIntents: data.allowedIntents,
       updatedAt: new Date(),
-      createdAt: existing.empty ? new Date() : existing.docs[0].data().createdAt,
+      createdAt: existingDoc.exists ? existingDoc.data()?.createdAt : new Date(),
     };
 
-    if (existing.empty) {
-      await keywordsRef.add(keywordsData);
-    } else {
-      await keywordsRef.doc(existing.docs[0].id).update(keywordsData);
-    }
+    await keywordsRef.set(keywordsData, { merge: true });
 
     return NextResponse.json({
       message: 'Keywords saved successfully',

@@ -35,6 +35,7 @@ const UpdateAccountDetailsSchema = z.object({
   location: z.string().optional(),
   role: z.string().optional(),
   skills: z.array(z.string()).optional(),
+  category: z.string().optional(),
 });
 
 export async function POST(

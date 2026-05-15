@@ -8,6 +8,11 @@ export interface AutomationAccount {
   location?: string;
   role?: string;
   skills?: string[];
+  /**
+   * High-level category used to select content sources and tune "recent topics" seeding.
+   * Keep this coarse-grained; detailed topical control should live in keywords/settings.
+   */
+  category?: AutomationAccountCategory;
   createdAt: Date;
   updatedAt: Date;
   isActive: boolean;
@@ -21,6 +26,18 @@ export interface AutomationAccount {
     enableAutoReactions: boolean;
     minMinutesBetweenActions: number;
   };
+}
+
+export enum AutomationAccountCategory {
+  AI = 'ai',
+  SOFTWARE = 'software',
+  STARTUPS = 'startups',
+  PRODUCT = 'product',
+  MARKETING = 'marketing',
+  SALES = 'sales',
+  FINANCE = 'finance',
+  HEALTH = 'health',
+  GENERAL = 'general'
 }
 
 // Post Type for AI Links Mobile App

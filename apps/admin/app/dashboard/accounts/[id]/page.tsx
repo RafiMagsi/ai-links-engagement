@@ -7,6 +7,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { AutomationAccount, TonePreset, ContentIntent } from '@ai-links/shared-types';
+import { useDialog } from '@/lib/dialog-context';
 
 type TabType = 'details' | 'keywords' | 'schedule';
 
@@ -15,6 +16,7 @@ export default function AccountEditPage() {
   const params = useParams();
   const { user } = useAuth();
   const accountId = params.id as string;
+  const dialog = useDialog();
 
   const [account, setAccount] = useState<AutomationAccount | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +51,7 @@ export default function AccountEditPage() {
     location: '',
     role: '',
     skills: '',
+    category: 'ai',
   });
 
   useEffect(() => {
@@ -57,16 +60,44 @@ export default function AccountEditPage() {
 
       try {
         const { ApiClient } = await import('@/lib/api-client');
-        const response = await ApiClient.get(`/api/accounts/${accountId}`);
-        if (response.account) {
-          setAccount(response.account);
+        const [accountRes, keywordsRes, scheduleRes] = await Promise.all([
+          ApiClient.get(`/api/accounts/${accountId}`),
+          ApiClient.get(`/api/accounts/${accountId}/keywords`),
+          ApiClient.get(`/api/accounts/${accountId}/schedule`),
+        ]);
+
+        if (accountRes.account) {
+          setAccount(accountRes.account);
           setDetailsForm({
-            name: response.account.name || '',
-            email: response.account.email || '',
-            bio: response.account.bio || '',
-            location: response.account.location || '',
-            role: response.account.role || '',
-            skills: response.account.skills?.join(', ') || '',
+            name: accountRes.account.name || '',
+            email: accountRes.account.email || '',
+            bio: accountRes.account.bio || '',
+            location: accountRes.account.location || '',
+            role: accountRes.account.role || '',
+            skills: accountRes.account.skills?.join(', ') || '',
+            category: accountRes.account.category || 'ai',
+          });
+        }
+
+        if (keywordsRes?.keywords) {
+          setKeywordsForm({
+            primaryKeywords: (keywordsRes.keywords.primaryKeywords || []).join(', '),
+            secondaryKeywords: (keywordsRes.keywords.secondaryKeywords || []).join(', '),
+            blockedKeywords: (keywordsRes.keywords.blockedKeywords || []).join(', '),
+            tonePreset: keywordsRes.keywords.tonePreset || TonePreset.PROFESSIONAL,
+            allowedIntents: keywordsRes.keywords.allowedIntents || [ContentIntent.KNOWLEDGE_SHARING],
+          });
+        }
+
+        const schedule = (scheduleRes as any)?.schedule;
+        if (schedule) {
+          setScheduleForm({
+            weekdayPostStart: schedule.weekdayPostWindow?.startTime || '09:00',
+            weekdayPostEnd: schedule.weekdayPostWindow?.endTime || '17:00',
+            weekendPostStart: schedule.weekendPostWindow?.startTime || '10:00',
+            weekendPostEnd: schedule.weekendPostWindow?.endTime || '18:00',
+            timezone: schedule.timezone || 'Asia/Karachi',
+            minMinutesBetweenActions: schedule.minMinutesBetweenActions || 30,
           });
         }
       } catch (err) {
@@ -95,11 +126,15 @@ export default function AccountEditPage() {
         tonePreset: keywordsForm.tonePreset,
         allowedIntents: keywordsForm.allowedIntents,
       });
-      alert('Keywords saved successfully!');
-    } catch (err) {
-      alert('Failed to save keywords: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
       setSaving(false);
+      void dialog.alert({ variant: 'success', message: 'Keywords saved successfully!' });
+    } catch (err) {
+      setSaving(false);
+      void dialog.alert({
+        variant: 'error',
+        message:
+          'Failed to save keywords: ' + (err instanceof Error ? err.message : 'Unknown error'),
+      });
     }
   };
 
@@ -128,11 +163,15 @@ export default function AccountEditPage() {
         minMinutesBetweenActions: scheduleForm.minMinutesBetweenActions,
         weekdaysEnabled: [true, true, true, true, true, false, false],
       });
-      alert('Schedule saved successfully!');
-    } catch (err) {
-      alert('Failed to save schedule: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
       setSaving(false);
+      void dialog.alert({ variant: 'success', message: 'Schedule saved successfully!' });
+    } catch (err) {
+      setSaving(false);
+      void dialog.alert({
+        variant: 'error',
+        message:
+          'Failed to save schedule: ' + (err instanceof Error ? err.message : 'Unknown error'),
+      });
     }
   };
 
@@ -155,16 +194,21 @@ export default function AccountEditPage() {
         location: detailsForm.location || undefined,
         role: detailsForm.role || undefined,
         skills: skillsArray.length > 0 ? skillsArray : undefined,
+        category: detailsForm.category || undefined,
       });
 
       if (response.account) {
         setAccount(response.account);
       }
-      alert('Account details saved successfully!');
-    } catch (err) {
-      alert('Failed to save details: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
       setSaving(false);
+      void dialog.alert({ variant: 'success', message: 'Account details saved successfully!' });
+    } catch (err) {
+      setSaving(false);
+      void dialog.alert({
+        variant: 'error',
+        message:
+          'Failed to save details: ' + (err instanceof Error ? err.message : 'Unknown error'),
+      });
     }
   };
 
@@ -323,6 +367,27 @@ export default function AccountEditPage() {
                     placeholder="comma-separated, e.g., AI, ML, Python"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Category</label>
+                  <select
+                    value={detailsForm.category}
+                    onChange={(e) => setDetailsForm({ ...detailsForm, category: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="ai">AI</option>
+                    <option value="software">Software</option>
+                    <option value="startups">Startups</option>
+                    <option value="product">Product</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="sales">Sales</option>
+                    <option value="finance">Finance</option>
+                    <option value="health">Health</option>
+                    <option value="general">General</option>
+                  </select>
                 </div>
               </div>
 

@@ -5,12 +5,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { AutomationJob } from '@ai-links/shared-types';
+import { useDialog } from '@/lib/dialog-context';
 
 export default function JobDetailsPage() {
   const { user } = useAuth();
   const params = useParams();
   const router = useRouter();
   const jobId = params.id as string;
+  const dialog = useDialog();
 
   const [job, setJob] = useState<AutomationJob | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,7 +67,10 @@ export default function JobDetailsPage() {
       // Refresh job data
       window.location.reload();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'An error occurred');
+      await dialog.alert({
+        variant: 'error',
+        message: err instanceof Error ? err.message : 'An error occurred',
+      });
     }
   };
 
@@ -86,7 +91,10 @@ export default function JobDetailsPage() {
       if (!response.ok) throw new Error('Failed to cancel job');
       router.push('/dashboard/jobs');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'An error occurred');
+      await dialog.alert({
+        variant: 'error',
+        message: err instanceof Error ? err.message : 'An error occurred',
+      });
     }
   };
 

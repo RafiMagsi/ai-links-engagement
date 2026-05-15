@@ -2,6 +2,7 @@
 
 import { AuthProvider } from '@/lib/auth-context';
 import { ProtectedRoute } from '@/components/protected-route';
+import { DialogProvider } from '@/lib/dialog-context';
 
 export default function DashboardLayout({
   children,
@@ -10,7 +11,9 @@ export default function DashboardLayout({
 }) {
   return (
     <AuthProvider>
-      <ProtectedRoute>{children}</ProtectedRoute>
+      <DialogProvider>
+        <ProtectedRoute>{children}</ProtectedRoute>
+      </DialogProvider>
     </AuthProvider>
   );
 }
