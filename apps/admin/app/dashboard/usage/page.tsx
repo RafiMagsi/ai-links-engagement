@@ -148,6 +148,22 @@ export default function UsagePage() {
                     <p className="text-xs text-gray-500">Avg Tokens / Execution</p>
                     <p className="text-2xl font-bold text-gray-900">{breakdown.avgTokensPerExecution ?? '-'}</p>
                   </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-gray-500">Input Tokens</p>
+                    <p className="text-2xl font-bold text-gray-900">{breakdown.totalInputTokens ?? '-'}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-gray-500">Output Tokens</p>
+                    <p className="text-2xl font-bold text-gray-900">{breakdown.totalOutputTokens ?? '-'}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-gray-500">Avg Input / Execution</p>
+                    <p className="text-2xl font-bold text-gray-900">{breakdown.avgInputTokensPerExecution ?? '-'}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-gray-500">Avg Output / Execution</p>
+                    <p className="text-2xl font-bold text-gray-900">{breakdown.avgOutputTokensPerExecution ?? '-'}</p>
+                  </div>
                 </div>
               </div>
             )}

@@ -15,6 +15,9 @@ const GeneratedContentSchema = z.object({
   content: z.string().min(10).max(3000),
   hashtags: z.array(z.string()).optional(),
   emoji: z.array(z.string()).optional(),
+  tokensUsed: z.number().optional(),
+  inputTokens: z.number().optional(),
+  outputTokens: z.number().optional(),
 });
 
 type GeneratedContent = z.infer<typeof GeneratedContentSchema>;
@@ -148,14 +151,20 @@ Generate ONLY the post content, without any meta information.`;
 
       const content = response.choices[0]?.message?.content || '';
       const clamped = this.clampToMaxChars(content, POST_MAX_CHARS);
+      const tokensUsed = response.usage?.total_tokens ?? undefined;
+      const inputTokens = response.usage?.prompt_tokens ?? undefined;
+      const outputTokens = response.usage?.completion_tokens ?? undefined;
 
       this.logger.info(
-        { keyword, tokensUsed: response.usage?.total_tokens },
+        { keyword, tokensUsed, inputTokens, outputTokens },
         'Post generated successfully'
       );
 
       return {
         content: clamped,
+        tokensUsed,
+        inputTokens,
+        outputTokens,
       };
     } catch (error) {
       this.logger.error({ error, keyword }, 'Failed to generate post');
@@ -201,14 +210,20 @@ Generate ONLY the comment text, without any meta information.`;
 
       const content = response.choices[0]?.message?.content || '';
       const clamped = this.clampToMaxChars(content, COMMENT_MAX_CHARS);
+      const tokensUsed = response.usage?.total_tokens ?? undefined;
+      const inputTokens = response.usage?.prompt_tokens ?? undefined;
+      const outputTokens = response.usage?.completion_tokens ?? undefined;
 
       this.logger.info(
-        { keyword, tokensUsed: response.usage?.total_tokens },
+        { keyword, tokensUsed, inputTokens, outputTokens },
         'Comment generated successfully'
       );
 
       return {
         content: clamped,
+        tokensUsed,
+        inputTokens,
+        outputTokens,
       };
     } catch (error) {
       this.logger.error({ error, keyword }, 'Failed to generate comment');

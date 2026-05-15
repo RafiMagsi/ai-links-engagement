@@ -197,20 +197,37 @@ export async function GET(request: NextRequest) {
         const execSnap = await db
           .collectionGroup('executions')
           .where('startedAt', '>=', startTs)
+          .select('resultSummary', 'startedAt')
           .get();
         let totalTokens = 0;
+        let totalInputTokens = 0;
+        let totalOutputTokens = 0;
         execSnap.docs.forEach((d: any) => {
           const ex = d.data() as any;
           const tokens = Number(ex?.resultSummary?.tokensUsed || 0);
+          const inputTokens = Number(ex?.resultSummary?.inputTokens || 0);
+          const outputTokens = Number(ex?.resultSummary?.outputTokens || 0);
           totalTokens += tokens;
+          totalInputTokens += inputTokens;
+          totalOutputTokens += outputTokens;
         });
         breakdown.executions = execSnap.size;
         breakdown.totalTokens = totalTokens;
         breakdown.avgTokensPerExecution = execSnap.size > 0 ? Math.round(totalTokens / execSnap.size) : 0;
+        breakdown.totalInputTokens = totalInputTokens;
+        breakdown.totalOutputTokens = totalOutputTokens;
+        breakdown.avgInputTokensPerExecution =
+          execSnap.size > 0 ? Math.round(totalInputTokens / execSnap.size) : 0;
+        breakdown.avgOutputTokensPerExecution =
+          execSnap.size > 0 ? Math.round(totalOutputTokens / execSnap.size) : 0;
       } catch {
-        breakdown.executions = null;
-        breakdown.totalTokens = null;
-        breakdown.avgTokensPerExecution = null;
+        breakdown.executions = 0;
+        breakdown.totalTokens = 0;
+        breakdown.avgTokensPerExecution = 0;
+        breakdown.totalInputTokens = 0;
+        breakdown.totalOutputTokens = 0;
+        breakdown.avgInputTokensPerExecution = 0;
+        breakdown.avgOutputTokensPerExecution = 0;
       }
 
       return NextResponse.json({ todayUsage, usageHistory, breakdown });

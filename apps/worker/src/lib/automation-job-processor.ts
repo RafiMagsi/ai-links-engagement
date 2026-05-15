@@ -303,6 +303,8 @@ export class AutomationJobProcessor {
                 resultSummary: {
                   aiModel: result?.aiModel,
                   tokensUsed: result?.tokensUsed,
+                  inputTokens: result?.inputTokens,
+                  outputTokens: result?.outputTokens,
                   postId: result?.postId,
                   commentId: result?.commentId,
                   contentHash: result?.contentHash,
@@ -550,10 +552,16 @@ export class AutomationJobProcessor {
       headlineUrls: recentItems.map((i) => i.url),
     });
 
+    const tokensUsed = Number(content?.tokensUsed || 0) || Math.ceil(normalizedText.length / 4);
+    const inputTokens = Number(content?.inputTokens || 0) || null;
+    const outputTokens = Number(content?.outputTokens || 0) || null;
+
     return {
       generatedContent: normalizedText,
       aiModel: this.openAiModel || process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      tokensUsed: normalizedText.length / 4,
+      tokensUsed,
+      inputTokens,
+      outputTokens,
       postId,
       hashtagsExtracted: hashtagMatch,
       contentHash,
@@ -711,10 +719,16 @@ export class AutomationJobProcessor {
         { merge: true }
       );
 
+    const tokensUsed = Number(content?.tokensUsed || 0) || Math.ceil(text.length / 4);
+    const inputTokens = Number(content?.inputTokens || 0) || null;
+    const outputTokens = Number(content?.outputTokens || 0) || null;
+
     return {
       generatedContent: text,
       aiModel: this.openAiModel || process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      tokensUsed: text.length / 4,
+      tokensUsed,
+      inputTokens,
+      outputTokens,
       postId: targetPostId,
       commentId: commentRef.id,
     };
