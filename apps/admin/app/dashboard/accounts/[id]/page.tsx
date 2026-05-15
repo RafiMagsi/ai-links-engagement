@@ -23,6 +23,7 @@ export default function AccountEditPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('details');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Keywords form state
   const [keywordsForm, setKeywordsForm] = useState({
@@ -258,6 +259,39 @@ export default function AccountEditPage() {
               <h1 className="text-3xl font-bold text-gray-900">{account.name}</h1>
               <p className="text-gray-600 text-sm">{account.email}</p>
             </div>
+            <button
+              type="button"
+              onClick={async () => {
+                const confirmed = await dialog.confirm({
+                  variant: 'warning',
+                  title: 'Delete Account?',
+                  message:
+                    'This will delete the account and related jobs/posts/comments. This cannot be undone.',
+                  confirmText: 'Delete',
+                  cancelText: 'Cancel',
+                });
+                if (!confirmed) return;
+
+                try {
+                  setDeleting(true);
+                  const { ApiClient } = await import('@/lib/api-client');
+                  await ApiClient.delete(`/api/accounts/${accountId}`);
+                  void dialog.alert({ variant: 'success', message: 'Account deleted.' });
+                  router.push('/dashboard/accounts');
+                } catch (err) {
+                  void dialog.alert({
+                    variant: 'error',
+                    message: err instanceof Error ? err.message : 'Failed to delete account',
+                  });
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+              disabled={deleting}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
+            >
+              {deleting ? 'Deleting…' : 'Delete Account'}
+            </button>
           </div>
 
           {/* Tabs */}

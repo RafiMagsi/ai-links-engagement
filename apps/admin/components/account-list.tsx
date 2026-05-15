@@ -4,12 +4,15 @@ import { AutomationAccount } from '@ai-links/shared-types';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { ApiClient } from '@/lib/api-client';
+import { useDialog } from '@/lib/dialog-context';
 
 export function AccountList() {
   const [accounts, setAccounts] = useState<AutomationAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const { user } = useAuth();
+  const dialog = useDialog();
 
   useEffect(() => {
     if (!user) return;
@@ -97,6 +100,37 @@ export function AccountList() {
                 >
                   Edit
                 </a>
+                <button
+                  onClick={async () => {
+                    const confirmed = await dialog.confirm({
+                      variant: 'warning',
+                      title: 'Delete Account?',
+                      message:
+                        'This will delete the account and related jobs/posts/comments. This cannot be undone.',
+                      confirmText: 'Delete',
+                      cancelText: 'Cancel',
+                    });
+                    if (!confirmed) return;
+
+                    try {
+                      setDeletingId(account.id);
+                      await ApiClient.delete(`/api/accounts/${account.id}`);
+                      setAccounts((prev) => prev.filter((a) => a.id !== account.id));
+                      void dialog.alert({ variant: 'success', message: 'Account deleted.' });
+                    } catch (err) {
+                      void dialog.alert({
+                        variant: 'error',
+                        message: err instanceof Error ? err.message : 'Failed to delete account',
+                      });
+                    } finally {
+                      setDeletingId(null);
+                    }
+                  }}
+                  disabled={deletingId === account.id}
+                  className="ml-4 text-red-600 hover:underline disabled:opacity-50"
+                >
+                  {deletingId === account.id ? 'Deleting…' : 'Delete'}
+                </button>
               </td>
             </tr>
           ))}
