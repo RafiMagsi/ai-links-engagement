@@ -14,6 +14,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getRecentItemsForAccount } from './recent-content-sources.js';
 import type { RecentItem } from './recent-content-sources.js';
 import { loadContentMemory, appendContentMemory } from './content-memory.js';
+import os from 'os';
 
 const logger = getLogger();
 
@@ -86,6 +87,12 @@ export class AutomationJobProcessor {
     const jobRef = this.db.collection('automationJobs').doc(jobId);
     const lockId = crypto.randomUUID();
     const now = new Date();
+    const runnerEnv = process.env.WORKER_ENV || process.env.DEPLOYMENT_ENV || process.env.NODE_ENV || 'unknown';
+    const runner = {
+      env: runnerEnv,
+      hostname: process.env.HOSTNAME || os.hostname(),
+      pid: process.pid,
+    };
 
     try {
       const claimedJob = await this.db.runTransaction(async (tx) => {
@@ -129,6 +136,7 @@ export class AutomationJobProcessor {
           jobType: data.jobType,
           status: JobStatus.PROCESSING,
           lockId,
+          runner,
           startedAt: now,
           createdAt: now,
           updatedAt: now,

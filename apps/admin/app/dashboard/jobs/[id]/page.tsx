@@ -440,6 +440,13 @@ export default function JobDetailsPage() {
                               </>
                             )}
                           </p>
+                          {(ex.runner?.env || ex.runner?.hostname) && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Runner: {ex.runner?.env || 'unknown'}
+                              {ex.runner?.hostname ? ` @ ${ex.runner.hostname}` : ''}
+                              {ex.runner?.pid ? ` (pid ${ex.runner.pid})` : ''}
+                            </p>
+                          )}
                         </div>
                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(ex.status)}`}>
                           {(ex.status || '').toString().replace(/_/g, ' ')}
