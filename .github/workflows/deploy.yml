@@ -126,6 +126,39 @@ jobs:
             mkdir -p "$DEPLOY_DIR"
             cd "$DEPLOY_DIR"
 
+            # Fail fast if this directory contains files not owned by the deploy user.
+            # This typically happens when someone ran `pnpm install` as root, which breaks future deploys.
+            CURRENT_USER="$(id -un)"
+            if [ "$CURRENT_USER" != "${{ env.DEPLOY_USER }}" ]; then
+              echo "⚠️  Deploy script is running as '$CURRENT_USER' (expected '${{ env.DEPLOY_USER }}')."
+            fi
+
+            if [ -e "$DEPLOY_DIR" ] && [ ! -O "$DEPLOY_DIR" ]; then
+              echo "❌ $DEPLOY_DIR is not owned by '${{ env.DEPLOY_USER }}' (owner check failed)."
+              echo "Fix (run once as root): chown -R ${{ env.DEPLOY_USER }}:${{ env.DEPLOY_USER }} $DEPLOY_DIR"
+              exit 1
+            fi
+
+            if [ -d node_modules ]; then
+              echo "🔍 Checking node_modules ownership..."
+              if [ ! -w node_modules ]; then
+                echo "❌ node_modules is not writable by '${{ env.DEPLOY_USER }}'."
+                echo "Fix (run once as root): chown -R ${{ env.DEPLOY_USER }}:${{ env.DEPLOY_USER }} $DEPLOY_DIR/node_modules"
+                exit 1
+              fi
+
+              # Spot-check for wrong owners without traversing the entire tree.
+              BAD_OWNERS="$(find node_modules -maxdepth 4 ! -user ${{ env.DEPLOY_USER }} -print | head -n 20 || true)"
+              if [ -n "$BAD_OWNERS" ]; then
+                echo "❌ Found files in node_modules not owned by '${{ env.DEPLOY_USER }}' (showing up to 20):"
+                echo "$BAD_OWNERS"
+                echo "Fix options:"
+                echo "  - (recommended) run once as root: chown -R ${{ env.DEPLOY_USER }}:${{ env.DEPLOY_USER }} $DEPLOY_DIR/node_modules"
+                echo "  - or delete and reinstall: rm -rf $DEPLOY_DIR/node_modules && pnpm install --frozen-lockfile"
+                exit 1
+              fi
+            fi
+
             # Check if git repo exists
             if [ ! -d .git ]; then
               echo "Initializing git repository..."
